@@ -65,6 +65,7 @@ public class UIDoor : MonoBehaviour
         offset.y = 0f;
         float limit = inside ? activationDistance + exitMargin : activationDistance;
         bool nearby = offset.sqrMagnitude <= limit * limit;
+        if (nearby == inside) return;
         if (!nearby)
         {
             inside = false;
@@ -73,11 +74,8 @@ public class UIDoor : MonoBehaviour
             return;
         }
 
-        if (!inside)
-        {
-            inside = true;
-            ShowDisplay();
-        }
+        inside = true;
+        ShowDisplay();
     }
 
     private void ShowDisplay()
@@ -100,9 +98,7 @@ public class UIDoor : MonoBehaviour
 
     public void SelectYes()
     {
-        if (!inside || answered || display == null || !display.gameObject.activeSelf) return;
-        answered = true;
-        display.gameObject.SetActive(false);
+        if (!TryAcceptAnswer()) return;
         MovePlayerToSpawnPoint();
         onYes.Invoke();
     }
@@ -122,10 +118,15 @@ public class UIDoor : MonoBehaviour
 
     public void SelectNo()
     {
-        if (!inside || answered || display == null || !display.gameObject.activeSelf) return;
+        if (TryAcceptAnswer()) onNo.Invoke();
+    }
+
+    private bool TryAcceptAnswer()
+    {
+        if (!inside || answered || display == null || !display.gameObject.activeSelf) return false;
         answered = true;
         display.gameObject.SetActive(false);
-        onNo.Invoke();
+        return true;
     }
 
     private void BuildDisplay()
