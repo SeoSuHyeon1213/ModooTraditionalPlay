@@ -25,7 +25,7 @@ namespace FindOurSound.JangGuRhythm
             if (Time.time - lastHitTime < hitCooldown) return;
 
             ControllerSideMarker marker = other.GetComponentInParent<ControllerSideMarker>();
-            if (marker == null) return;
+            if (marker == null || !marker.AcceptsCollider(other)) return;
 
             lastHitTime = Time.time;
 

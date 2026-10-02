@@ -2,6 +2,7 @@
 using UnityEngine;
 using UnityEngine.Events;
 using System.Collections.Generic;
+using UnityEngine.XR.Interaction.Toolkit.Interactors;
 
 public class SabangGameManager : MonoBehaviour
 {
@@ -16,6 +17,12 @@ public class SabangGameManager : MonoBehaviour
     [SerializeField] private UnityEvent onMovingForward = new UnityEvent();
     [Tooltip("일반 이동·회전·텔레포트 입력 컴포넌트만 연결. XR Origin, 입력 관리자, 추적, QTE 이동 컴포넌트는 제외.")]
     [SerializeField] private Behaviour[] manualMovementComponents = new Behaviour[0];
+    [Tooltip("게임 중 UI 클릭을 막을 로비·UI용 Ray Interactor. 조준 전용 Ray는 제외한다.")]
+    [SerializeField] private XRRayInteractor[] uiRayInteractors = new XRRayInteractor[0];
+    [Tooltip("게임 중 UI 클릭을 막을 좌우 Near-Far Interactor. 추적과 Input Action Manager는 유지한다.")]
+    [SerializeField] private NearFarInteractor[] uiNearFarInteractors = new NearFarInteractor[0];
+    [Tooltip("게임 중 직접 누르기 UI 입력을 막을 좌우 Poke Interactor.")]
+    [SerializeField] private XRPokeInteractor[] uiPokeInteractors = new XRPokeInteractor[0];
     public GameState State { get; private set; } = GameState.Ready;
     public int CurrentTargetNumber { get; private set; } = 1;
     public event System.Action<GameState> StateChanged;
@@ -23,6 +30,9 @@ public class SabangGameManager : MonoBehaviour
     private SabangStone subscribedStone;
     private bool starting;
     private readonly Dictionary<Behaviour, bool> movementStates = new Dictionary<Behaviour, bool>();
+    private readonly Dictionary<XRRayInteractor, bool> rayUIStates = new Dictionary<XRRayInteractor, bool>();
+    private readonly Dictionary<NearFarInteractor, bool> nearFarUIStates = new Dictionary<NearFarInteractor, bool>();
+    private readonly Dictionary<XRPokeInteractor, bool> pokeUIStates = new Dictionary<XRPokeInteractor, bool>();
 
     private void OnEnable()
     {
@@ -51,13 +61,18 @@ public class SabangGameManager : MonoBehaviour
         try
         {
             LockManualMovement();
+            LockUIInput();
             started = stone.TryBeginRound(CurrentTargetNumber);
             return started;
         }
         finally
         {
             starting = false;
-            if (!started) RestoreManualMovement();
+            if (!started)
+            {
+                RestoreManualMovement();
+                RestoreUIInput();
+            }
         }
     }
 
@@ -77,7 +92,11 @@ public class SabangGameManager : MonoBehaviour
 
     private void SetState(GameState next)
     {
-        if (next == GameState.Ready || next == GameState.Cleared) RestoreManualMovement();
+        if (next == GameState.Ready || next == GameState.Cleared)
+        {
+            RestoreManualMovement();
+            RestoreUIInput();
+        }
         if (State == next) return;
         State = next;
         StateChanged?.Invoke(next);
@@ -110,6 +129,56 @@ public class SabangGameManager : MonoBehaviour
     {
         if (stone != null && State != GameState.Ready) stone.StopThrowing();
         SetState(GameState.Ready);
+    }
+
+    private void LockUIInput()
+    {
+        if (uiRayInteractors != null)
+        {
+            foreach (XRRayInteractor ray in uiRayInteractors)
+            {
+                if (ray == null || rayUIStates.ContainsKey(ray)) continue;
+                rayUIStates.Add(ray, ray.enableUIInteraction);
+                ray.enableUIInteraction = false;
+            }
+        }
+        if (uiNearFarInteractors != null)
+        {
+            foreach (NearFarInteractor interactor in uiNearFarInteractors)
+            {
+                if (interactor == null || nearFarUIStates.ContainsKey(interactor)) continue;
+                nearFarUIStates.Add(interactor, interactor.enableUIInteraction);
+                interactor.enableUIInteraction = false;
+            }
+        }
+        if (uiPokeInteractors != null)
+        {
+            foreach (XRPokeInteractor interactor in uiPokeInteractors)
+            {
+                if (interactor == null || pokeUIStates.ContainsKey(interactor)) continue;
+                pokeUIStates.Add(interactor, interactor.enableUIInteraction);
+                interactor.enableUIInteraction = false;
+            }
+        }
+    }
+
+    private void RestoreUIInput()
+    {
+        foreach (var entry in rayUIStates)
+        {
+            if (entry.Key != null) entry.Key.enableUIInteraction = entry.Value;
+        }
+        foreach (var entry in nearFarUIStates)
+        {
+            if (entry.Key != null) entry.Key.enableUIInteraction = entry.Value;
+        }
+        foreach (var entry in pokeUIStates)
+        {
+            if (entry.Key != null) entry.Key.enableUIInteraction = entry.Value;
+        }
+        rayUIStates.Clear();
+        nearFarUIStates.Clear();
+        pokeUIStates.Clear();
     }
 
     private void OnDisable()
