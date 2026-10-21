@@ -37747,6 +37747,9 @@ MonoBehaviour:
   uiRayInteractors: []
   uiNearFarInteractors: []
   uiPokeInteractors: []
+  completeRoundOnThrowSuccess: 1
+  nextRoundDelay: 1.5
+  lastTargetNumber: 8
 --- !u!1001 &1098214071
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -43679,7 +43682,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SabangStone
   map: {fileID: 1307876843}
   stoneBody: {fileID: 1273171922}
-  stoneCollider: {fileID: 1273171921}
+  stoneCollider: {fileID: 3795782195583666826}
   throwPoint: {fileID: 1298777021}
   rayOrigin: {fileID: 170474702}
   aimingRay: {fileID: 0}
@@ -43718,6 +43721,7 @@ MonoBehaviour:
   missDistancePerPower: 0.04
   flightTime: 1
   restingCenterHeight: 0.03
+  landingSlideKeep: 0.1
   settleSpeed: 0.15
   settleAngularSpeed: 0.5
   settleDuration: 0.2
@@ -43730,29 +43734,6 @@ MonoBehaviour:
   onThrowFailed:
     m_PersistentCalls:
       m_Calls: []
---- !u!136 &1273171921
-CapsuleCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 597106222415159191}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 2
-  m_Radius: 0.51371384
-  m_Height: 1.397608
-  m_Direction: 1
-  m_Center: {x: 0.018097699, y: 0.13501725, z: 0.029834121}
 --- !u!54 &1273171922
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -45023,7 +45004,7 @@ Transform:
   m_GameObject: {fileID: 1298777020}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0.7071068, z: -0, w: -0.7071068}
-  m_LocalPosition: {x: 0, y: -0.05999756, z: 10.799988}
+  m_LocalPosition: {x: 0, y: 1, z: 0}
   m_LocalScale: {x: 0.4266001, y: 0.04266, z: 0.4266001}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -47966,7 +47947,7 @@ Transform:
   m_GameObject: {fileID: 1389467995}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: -0.7071068, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: 2.42, y: 0.07, z: 3.17}
+  m_LocalPosition: {x: 2.42, y: 0.61, z: 3.17}
   m_LocalScale: {x: 4.522, y: 1.1305, z: 4.522}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -74526,8 +74507,8 @@ GameObject:
   - component: {fileID: 1389822839054712386}
   - component: {fileID: 1273171920}
   - component: {fileID: 1273171922}
-  - component: {fileID: 1273171921}
   - component: {fileID: 3795782195583666825}
+  - component: {fileID: 3795782195583666826}
   m_Layer: 0
   m_Name: ST_Stone5
   m_TagString: Untagged
@@ -74721,6 +74702,27 @@ MonoBehaviour:
   m_LimitAngularVelocity: 0
   m_MaxLinearVelocityDelta: 10
   m_MaxAngularVelocityDelta: 20
+--- !u!65 &3795782195583666826
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 597106222415159191}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 1.0274278, y: 1.3976082, z: 1.0250074}
+  m_Center: {x: 0.01760942, y: 0.13501726, z: 0.029834125}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

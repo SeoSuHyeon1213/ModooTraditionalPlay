@@ -51,6 +51,8 @@ public class SabangStone : MonoBehaviour
     [SerializeField, Min(0.001f)] private float missDistancePerPower = 0.04f;
     [SerializeField, Min(0.1f)] private float flightTime = 1f;
     [SerializeField, Min(0.01f)] private float restingCenterHeight = 0.03f;
+    [Tooltip("첫 바닥 착지 때 남길 수평 속도와 회전 속도의 비율. 0이면 그 자리에 멈추고 1이면 물리 그대로 미끄러진다.")]
+    [SerializeField, Range(0f, 1f)] private float landingSlideKeep = 0.1f;
     [SerializeField, Min(0.01f)] private float settleSpeed = 0.15f;
     [Tooltip("착지 안정화로 인정할 최대 회전 속도(rad/s)")]
     [SerializeField, Min(0.01f)] private float settleAngularSpeed = 0.5f;
@@ -73,7 +75,7 @@ public class SabangStone : MonoBehaviour
 
     private float elapsed, stableTime, chargingStartedAt;
     private Vector3 selectedPoint;
-    private bool triggerReleased, powerMatched, touchedBorder;
+    private bool triggerReleased, powerMatched, touchedBorder, landed;
     private bool previousActionPressed, previousDevicePressed, reportedMissingInput;
     private UnityEngine.XR.InputDevice diagnosticRightDevice;
     private readonly HashSet<Collider> groundContacts = new HashSet<Collider>();
@@ -353,7 +355,7 @@ public class SabangStone : MonoBehaviour
         stoneBody.linearVelocity = (destination - centerOffset - stoneBody.position) / flightTime
             - 0.5f * Physics.gravity * flightTime;
         elapsed = stableTime = 0f;
-        touchedBorder = false;
+        touchedBorder = landed = false;
         groundContacts.Clear();
         SetState(ThrowState.Flying);
     }
@@ -375,7 +377,7 @@ public class SabangStone : MonoBehaviour
     {
         if (State != ThrowState.Flying) return;
         bool success = !timedOut && powerMatched && !touchedBorder
-            && map.TryGetRegion(stoneCollider.bounds.center, out Map.Region region)
+            && map.TryGetRegion(GetCenterOnBoard(), out Map.Region region)
             && (int)region == targetNumber;
         FreezeStone();
         elapsed = 0f;
@@ -386,6 +388,14 @@ public class SabangStone : MonoBehaviour
         SetState(success ? ThrowState.Complete : ThrowState.Result);
         if (success) onThrowSucceeded.Invoke();
         else onThrowFailed.Invoke();
+    }
+
+    // 바닥에 안정된 망의 중심을 놀이판 면으로 내려 판정한다. Collider 높이나 놓인 방향에 따라 결과가 바뀌지 않게 한다.
+    private Vector3 GetCenterOnBoard()
+    {
+        Vector3 up = map.transform.up;
+        Vector3 center = stoneCollider.bounds.center;
+        return center - Vector3.Project(center - selectedPoint, up);
     }
 
     private void FreezeStone()
@@ -411,8 +421,23 @@ public class SabangStone : MonoBehaviour
     private void RegisterCollision(Collider other)
     {
         if (State != ThrowState.Flying) return;
-        if (InLayers(other, groundLayers)) groundContacts.Add(other);
+        if (InLayers(other, groundLayers))
+        {
+            groundContacts.Add(other);
+            if (!landed) DampLanding();
+        }
         if (InLayers(other, borderLayers)) touchedBorder = true;
+    }
+
+    // 비행 속도가 그대로 남으면 착지 후 미끄러져 목표 칸을 벗어나므로 첫 착지에서 한 번만 줄인다.
+    private void DampLanding()
+    {
+        landed = true;
+        Vector3 up = map.transform.up;
+        Vector3 velocity = stoneBody.linearVelocity;
+        Vector3 vertical = Vector3.Project(velocity, up);
+        stoneBody.linearVelocity = vertical + (velocity - vertical) * landingSlideKeep;
+        stoneBody.angularVelocity *= landingSlideKeep;
     }
     private void OnTriggerEnter(Collider other) { RegisterBorder(other); }
     private void OnTriggerStay(Collider other) { RegisterBorder(other); }

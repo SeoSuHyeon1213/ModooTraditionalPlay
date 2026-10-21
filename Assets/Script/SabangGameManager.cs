@@ -23,12 +23,20 @@ public class SabangGameManager : MonoBehaviour
     [SerializeField] private NearFarInteractor[] uiNearFarInteractors = new NearFarInteractor[0];
     [Tooltip("게임 중 직접 누르기 UI 입력을 막을 좌우 Poke Interactor.")]
     [SerializeField] private XRPokeInteractor[] uiPokeInteractors = new XRPokeInteractor[0];
+    [Header("프로토타입 라운드 진행")]
+    [Tooltip("전진·복귀·망 줍기 구현 전 임시 연결. 투척 성공 후 바로 라운드를 완료하고 다음 목표 칸으로 넘어간다.")]
+    [SerializeField] private bool completeRoundOnThrowSuccess = true;
+    [Tooltip("투척 성공 결과를 보여 준 뒤 다음 목표 칸을 시작하기까지의 시간(초)")]
+    [SerializeField, Min(0f)] private float nextRoundDelay = 1.5f;
+    [Tooltip("이 번호의 라운드까지 성공하면 진행을 멈춘다. 땅따먹기 구현 전 범위를 줄여 테스트할 때 사용한다.")]
+    [SerializeField, Range(1, 8)] private int lastTargetNumber = 8;
     public GameState State { get; private set; } = GameState.Ready;
     public int CurrentTargetNumber { get; private set; } = 1;
     public event System.Action<GameState> StateChanged;
 
     private SabangStone subscribedStone;
     private bool starting;
+    private Coroutine pendingRoundCompletion;
     private readonly Dictionary<Behaviour, bool> movementStates = new Dictionary<Behaviour, bool>();
     private readonly Dictionary<XRRayInteractor, bool> rayUIStates = new Dictionary<XRRayInteractor, bool>();
     private readonly Dictionary<NearFarInteractor, bool> nearFarUIStates = new Dictionary<NearFarInteractor, bool>();
@@ -96,11 +104,46 @@ public class SabangGameManager : MonoBehaviour
         {
             RestoreManualMovement();
             RestoreUIInput();
+            CancelPendingRoundCompletion();
         }
         if (State == next) return;
         State = next;
         StateChanged?.Invoke(next);
-        if (next == GameState.MovingForward) onMovingForward.Invoke();
+        if (next != GameState.MovingForward) return;
+        onMovingForward.Invoke();
+        // 투척 결과 처리 중에 다음 라운드를 시작하지 않도록 결과 표시 시간 뒤로 미룬다.
+        if (completeRoundOnThrowSuccess && pendingRoundCompletion == null && isActiveAndEnabled)
+            pendingRoundCompletion = StartCoroutine(CompleteRoundAfterDelay());
+    }
+
+    private System.Collections.IEnumerator CompleteRoundAfterDelay()
+    {
+        yield return new WaitForSeconds(nextRoundDelay);
+        pendingRoundCompletion = null;
+        CompleteRound();
+    }
+
+    private void CancelPendingRoundCompletion()
+    {
+        if (pendingRoundCompletion == null) return;
+        StopCoroutine(pendingRoundCompletion);
+        pendingRoundCompletion = null;
+    }
+
+    // 라운드 완료 신호. 전진·복귀·망 줍기 진행 코드가 생기면 놀이판 밖으로 나온 시점에 호출한다.
+    public bool CompleteRound()
+    {
+        if (State != GameState.MovingForward) return false;
+        SetState(GameState.RoundComplete);
+        if (CurrentTargetNumber >= lastTargetNumber)
+        {
+            Debug.Log($"SabangGameManager: {CurrentTargetNumber}번 라운드까지 완료했습니다. 다음 단계는 아직 구현되지 않았습니다.", this);
+            return true;
+        }
+        CurrentTargetNumber++;
+        if (!stone.TryBeginRound(CurrentTargetNumber))
+            Debug.LogError($"SabangGameManager: {CurrentTargetNumber}번 목표 라운드를 시작하지 못했습니다.", this);
+        return true;
     }
 
     private void LockManualMovement()
