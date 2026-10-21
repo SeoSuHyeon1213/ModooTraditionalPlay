@@ -1,6 +1,17 @@
+---
+name: unity-csharp-script
+description: Assets/Script의 Unity C# 스크립트를 만들거나 수정할 때 사용한다. 사방치기(Map, SabangStone, SabangGameManager, UIDoor) 구현, Inspector 직렬화 호환성, 상태 관리, 성능 정리, 검증 보고 기준과 CHECKLIST.md 갱신 방법을 제공한다.
+---
+
 # Unity C# 스크립트 작성 지침
 
-이 파일은 `Assets/Script`의 C# 파일을 만들거나 수정할 때 적용한다. 저장소 루트 `AGENTS.md`의 빠른 시작 정보도 함께 따른다.
+`Assets/Script`의 C# 파일을 만들거나 수정할 때 적용한다. 저장소 루트 `CLAUDE.md`도 함께 따른다.
+
+## 작업 시작 시
+
+1. `CLAUDE.md`와 이 스킬을 확인한다.
+2. 사방치기 작업이면 `Assets/Script/사방치기규칙_구체화.txt`와 `Assets/Script/CHECKLIST.md`의 관련 섹션을 읽는다.
+3. `git status`와 관련 diff로 기존 변경을 확인한다.
 
 ## 변경 전 확인과 범위
 
@@ -44,3 +55,10 @@
 - 변경 후에는 Inspector 연결, 입력 중복 방지, 결과 이벤트 호출 횟수, 실패 후 초기화가 유지되는지 확인한다.
 - 코드가 바뀌면 `git diff --check`를 실행한다. 검증이 불가능하면 시도한 명령과 이유를 정확히 보고한다.
 - 커밋은 사용자가 요청했거나 작업 흐름에서 요구될 때만 만든다. 요청된 커밋은 하나의 논리적 변경만 담는다.
+
+## 체크리스트 갱신
+
+- 주요 단계가 끝나면 `Assets/Script/CHECKLIST.md`의 해당 항목과 `현재 상태`, `검증 기록`을 갱신한다.
+- 프로토타입·필수 구현 항목은 코드와 저장된 씬 연결이 갖춰졌을 때 체크한다. Play Mode 확인은 `필수 항목 검증`에 따로 체크한다.
+- 실패·차단·미실행 항목은 이유와 함께 기록하고 완료로 표시하지 않는다.
+- 단일 작업의 임시 판단은 체크리스트에만 남기고, 지속적으로 필요한 규칙만 `CLAUDE.md`나 이 스킬에 반영한다.
