@@ -1,62 +1,40 @@
-// 사방망의 위치 선택, 왕복 파워 게이지, 물리 투척과 실패 재시도를 관리한다.
-using TMPro;
+// 사방망을 XR Grab으로 직접 잡아 던지게 하고, 착지 위치와 경계선 접촉으로 투척 결과와 실패 재시도를 관리한다.
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
-using UnityEngine.InputSystem;
-using UnityEngine.UI;
-using UnityEngine.XR.Interaction.Toolkit.Interactors;
-using UnityEngine.XR.Interaction.Toolkit.Interactors.Visuals;
+using UnityEngine.XR.Interaction.Toolkit;
+using UnityEngine.XR.Interaction.Toolkit.Interactables;
 
 public class SabangStone : MonoBehaviour
 {
-    public enum ThrowState { Idle, Selecting, Charging, Flying, Result, Complete }
+    // 정수 순서를 유지한다. Ready는 잡기 대기, Holding은 손에 들고 있는 상태다.
+    public enum ThrowState { Idle, Ready, Holding, Flying, Result, Complete }
 
     [Header("직접 배치한 참조")]
     [SerializeField] private Map map;
     [SerializeField] private Rigidbody stoneBody;
     [SerializeField] private Collider stoneCollider;
+    [Tooltip("망과 같은 오브젝트의 XR Grab Interactable. Throw On Detach를 켜고, 던지는 힘은 Throw Velocity Scale로 조절한다.")]
+    [SerializeField] private XRGrabInteractable grabInteractable;
+    [Tooltip("투척 대기 중 망이 놓이는 위치. 숙이지 않고 손을 뻗어 잡을 수 있는 높이에 둔다.")]
     [SerializeField] private Transform throwPoint;
-    [SerializeField] private Transform rayOrigin;
-    [Tooltip("선택 사항. 오른손 조준 전용 Ray Interactor. 연결하지 않으면 기존 Ray Origin을 사용한다.")]
-    [SerializeField] private XRRayInteractor aimingRay;
-    [Tooltip("Aiming Ray와 같은 오브젝트의 Line Visual. 위치 선택 중에만 표시한다.")]
-    [SerializeField] private XRInteractorLineVisual aimingLineVisual;
-    [SerializeField] private InputActionReference rightTrigger;
-    [Tooltip("오른손 실제 Trigger와 연결된 Action의 눌림 변화를 Console에 출력한다. 문제 확인 후 끌 수 있다.")]
-    [SerializeField] private bool logTriggerDiagnostics = true;
-    [SerializeField] private Transform targetMarker;
-    [SerializeField] private LayerMask tileLayers;
+    [Tooltip("선택 사항. 땅따먹기 중 망을 놓을 위치. 땅따먹기 위치가 시작 위치와 다를 때만 연결하고, 비우면 Throw Point를 사용한다.")]
+    [SerializeField] private Transform claimThrowPoint;
     [SerializeField] private LayerMask groundLayers;
     [SerializeField] private LayerMask borderLayers;
-    [SerializeField, Min(0.1f)] private float rayDistance = 10f;
-    [Tooltip("표시용 마커만 표면 위로 띄우는 거리(m). 실제 목표 위치에는 적용하지 않는다.")]
-    [SerializeField, Min(0f)] private float markerSurfaceOffset = 0.005f;
 
     [Header("플레이 HUD 표시")]
     [SerializeField] private UIManager uiManager;
 
-    // 기존 씬·프리팹의 UI 참조를 보존하기 위한 이관 필드. 표시 로직은 UIManager에만 둔다.
-    [SerializeField, HideInInspector] private GameObject gaugeRoot;
-    [SerializeField, HideInInspector] private Slider powerSlider;
-    [SerializeField, HideInInspector] private RectTransform successBand;
-    [SerializeField, HideInInspector] private TMP_Text resultText;
-
-    [Header("파워와 비행")]
+    [Header("목표와 착지")]
     [SerializeField, Range(1, 8)] private int targetNumber = 1;
-    [SerializeField] private float[] requiredPowers = { 25f, 30f, 40f, 50f, 55f, 65f, 75f, 80f };
-    [SerializeField, Range(0f, 50f)] private float tolerance = 10f;
-    [SerializeField, Min(1f)] private float powerPerSecond = 60f;
-    [Tooltip("허용 범위를 벗어난 파워 1당 짧거나 길게 떨어질 거리(m)")]
-    [SerializeField, Min(0.001f)] private float missDistancePerPower = 0.04f;
-    [SerializeField, Min(0.1f)] private float flightTime = 1f;
-    [SerializeField, Min(0.01f)] private float restingCenterHeight = 0.03f;
     [Tooltip("첫 바닥 착지 때 남길 수평 속도와 회전 속도의 비율. 0이면 그 자리에 멈추고 1이면 물리 그대로 미끄러진다.")]
     [SerializeField, Range(0f, 1f)] private float landingSlideKeep = 0.1f;
     [SerializeField, Min(0.01f)] private float settleSpeed = 0.15f;
     [Tooltip("착지 안정화로 인정할 최대 회전 속도(rad/s)")]
     [SerializeField, Min(0.01f)] private float settleAngularSpeed = 0.5f;
     [SerializeField, Min(0.01f)] private float settleDuration = 0.2f;
+    [Tooltip("손에서 놓은 뒤 이 시간 안에 바닥에 멈추지 않으면 실패로 처리한다(초).")]
     [SerializeField, Min(1f)] private float flightTimeout = 5f;
     [SerializeField, Min(0.1f)] private float resultDuration = 1.2f;
     [SerializeField] private bool startAutomatically = false;
@@ -67,30 +45,34 @@ public class SabangStone : MonoBehaviour
 
     public ThrowState State { get; private set; }
     public int FailureCount { get; private set; }
-    public float SelectedPower { get; private set; }
-    public Vector3 SelectedPoint => selectedPoint;
     public int TargetNumber => targetNumber;
+    // 땅따먹기 투척이면 목표 칸 없이 1~8번 중 착지한 칸을 성공으로 본다.
+    public bool IsClaiming { get; private set; }
+    // 마지막 성공 투척이 멈춘 칸 번호. 성공 전이나 실패 후에는 0이다.
+    public int LandedTile { get; private set; }
     public bool StartsAutomatically => startAutomatically;
     public event System.Action<ThrowState> StateChanged;
 
-    private float elapsed, stableTime, chargingStartedAt;
-    private Vector3 selectedPoint;
-    private bool triggerReleased, powerMatched, touchedBorder, landed;
-    private bool previousActionPressed, previousDevicePressed, reportedMissingInput;
-    private UnityEngine.XR.InputDevice diagnosticRightDevice;
+    private float elapsed, stableTime;
+    private bool touchedBorder, landed;
     private readonly HashSet<Collider> groundContacts = new HashSet<Collider>();
-    private bool capturedAimVisual;
-    private bool originalLineEnabled;
-    private bool originalSetLineColor;
-    private Gradient originalValidGradient, originalInvalidGradient, originalBlockedGradient;
-    private Gradient validAimGradient, invalidAimGradient;
+    private XRGrabInteractable subscribedGrab;
+    private InteractionLayerMask originalGrabLayers;
+    private bool capturedGrabLayers;
+
+    private void OnEnable()
+    {
+        subscribedGrab = grabInteractable;
+        if (subscribedGrab == null) return;
+        subscribedGrab.selectEntered.AddListener(HandleGrabbed);
+        subscribedGrab.selectExited.AddListener(HandleReleased);
+    }
 
     private void Start()
     {
-        if (logTriggerDiagnostics) ReportTriggerConfiguration();
         if (State != ThrowState.Idle) return;
-        if (PrepareUI() && uiManager.ValidateConfiguration(transform)) uiManager.ResetPresentation();
-        SetTargetMarker(false);
+        ApplyGrabPermission();
+        if (uiManager != null && uiManager.ValidateConfiguration()) uiManager.ClearResult();
         if (startAutomatically) BeginRound(targetNumber);
     }
 
@@ -107,37 +89,21 @@ public class SabangStone : MonoBehaviour
             return ConfigurationError("SabangStone과 같은 오브젝트의 Rigidbody를 Stone Body에 연결하세요.");
         if (stoneCollider == null || stoneCollider.attachedRigidbody != stoneBody ||
             !stoneCollider.enabled || stoneCollider.isTrigger)
-            return ConfigurationError("Stone Body에 속한 활성 Collider를 연결하고 Is Trigger를 끄세요.");
+            return ConfigurationError("Stone Body에 속한 활성 Collider를 연결하고 Is Trigger를 끄세요. Mesh Collider는 Convex를 켜야 합니다.");
+        if (grabInteractable == null || grabInteractable.gameObject != gameObject || subscribedGrab != grabInteractable)
+            return ConfigurationError("망과 같은 오브젝트의 XR Grab Interactable을 Grab Interactable에 연결하세요.");
+        if (!grabInteractable.isActiveAndEnabled || !grabInteractable.throwOnDetach)
+            return ConfigurationError("XR Grab Interactable을 활성화하고 Throw On Detach를 켜세요.");
         if (throwPoint == null || throwPoint.IsChildOf(transform))
             return ConfigurationError("망 자신이나 자식이 아닌 Throw Point를 연결하세요.");
-        if (aimingRay == null && rayOrigin == null) return ConfigurationError("오른손 Aiming Ray 또는 Ray Origin을 연결하세요.");
-        if (aimingRay != null)
-        {
-            if (!aimingRay.isActiveAndEnabled || aimingRay.lineType != XRRayInteractor.LineType.StraightLine
-                || aimingRay.hitDetectionType != XRRayInteractor.HitDetectionType.Raycast
-                || aimingRay.raycastTriggerInteraction != QueryTriggerInteraction.Collide
-                || (aimingRay.raycastMask.value & tileLayers.value) != tileLayers.value
-                || aimingRay.enableUIInteraction)
-                return ConfigurationError("Aiming Ray를 활성화하고 Straight Line, Raycast, Trigger Collide, Tile Layers 포함, UI Interaction 끄기로 설정하세요.");
-            if (aimingLineVisual != null && aimingLineVisual.gameObject != aimingRay.gameObject)
-                return ConfigurationError("Aiming Ray와 같은 오브젝트의 Aiming Line Visual을 연결하세요.");
-        }
-        if (rightTrigger == null || rightTrigger.action == null || !rightTrigger.action.enabled)
-            return ConfigurationError("오른손 Trigger Input Action을 연결하고 XR Origin의 Input Action Manager로 활성화하세요.");
-        if (targetMarker == null || transform.IsChildOf(targetMarker))
-            return ConfigurationError("망 자신이나 부모가 아닌 별도 Target Marker를 연결하세요.");
-        if (tileLayers.value == 0 || (tileLayers.value & (1 << map.gameObject.layer)) == 0)
-            return ConfigurationError("Tile Layers에 Map 오브젝트의 Layer를 포함하세요.");
-        if ((tileLayers.value & (groundLayers.value | borderLayers.value)) != 0)
-            return ConfigurationError("Tile Layers는 Ground Layers 및 Border Layers와 분리하세요.");
+        if (claimThrowPoint != null && claimThrowPoint.IsChildOf(transform))
+            return ConfigurationError("Claim Throw Point는 망 자신이나 자식이 아닌 위치를 연결하세요.");
         if (groundLayers.value == 0 || borderLayers.value == 0)
             return ConfigurationError("Ground Layers와 Border Layers를 지정하세요.");
-        if (!PrepareUI()) return false;
-        if (!uiManager.ValidateConfiguration(transform)) return false;
-        if (flightTime <= 0f || flightTimeout <= flightTime || settleDuration <= 0f || resultDuration <= 0f)
-            return ConfigurationError("비행·안정화·결과 시간은 양수이며 Flight Timeout은 Flight Time보다 커야 합니다.");
-        if (number < 1 || number > 8 || requiredPowers == null || requiredPowers.Length != 8)
-            return ConfigurationError("목표 번호는 1~8, Required Powers는 8개로 설정하세요.");
+        if (uiManager == null)
+            return ConfigurationError("UIManager를 별도 UI 오브젝트에 추가하고 UI Manager에 연결하세요.");
+        if (!uiManager.ValidateConfiguration()) return false;
+        if (number < 1 || number > 8) return ConfigurationError("목표 번호는 1~8로 설정하세요.");
         return true;
     }
 
@@ -149,215 +115,81 @@ public class SabangStone : MonoBehaviour
 
     public bool TryBeginRound(int number)
     {
-        // On Yes 등에 BeginRound가 중복 연결되어도 진행 중인 선택을 초기화하지 않는다.
+        // 시작 이벤트가 중복 연결되어도 진행 중인 시도를 초기화하지 않는다.
         if (State != ThrowState.Idle && State != ThrowState.Complete) return false;
         if (!CanBeginRound(number)) return false;
         targetNumber = number;
-        CaptureAimVisual();
+        IsClaiming = false;
         ResetAttempt();
         return true;
     }
 
+    // 8번 라운드 이후의 땅따먹기 투척을 시작한다. 판정 외의 잡기·비행·재시도 흐름은 라운드 투척과 같다.
+    public bool TryBeginClaim()
+    {
+        if (State != ThrowState.Idle && State != ThrowState.Complete) return false;
+        if (!CanBeginRound(targetNumber)) return false;
+        IsClaiming = true;
+        ResetAttempt();
+        return true;
+    }
+
+    // 새 게임을 시작할 때만 호출한다. 진행 중에는 라운드와 땅따먹기 실패를 모두 누적한다.
+    public void ResetFailureCount()
+    {
+        FailureCount = 0;
+    }
+
+    // 망을 Throw Point에 되돌려 같은 목표의 잡기 대기부터 다시 시작한다.
     private void ResetAttempt()
     {
         FreezeStone();
-        stoneBody.position = throwPoint.position;
-        stoneBody.rotation = throwPoint.rotation;
-        touchedBorder = powerMatched = false;
-        selectedPoint = Vector3.zero;
-        SelectedPower = 0f;
-        triggerReleased = false;
+        Transform point = IsClaiming && claimThrowPoint != null ? claimThrowPoint : throwPoint;
+        // Kinematic 상태에서 Transform을 옮겨 같은 프레임의 잡기 판정이 새 위치를 쓰게 한다.
+        transform.SetPositionAndRotation(point.position, point.rotation);
+        touchedBorder = landed = false;
         elapsed = stableTime = 0f;
-        uiManager?.HideGauge();
-        uiManager?.ClearResult();
-        SetTargetMarker(false);
-        SetState(ThrowState.Selecting);
+        LandedTile = 0;
+        if (IsClaiming) uiManager.ShowClaimPrompt();
+        else uiManager.ShowTargetPrompt(targetNumber);
+        SetState(ThrowState.Ready);
     }
 
-    private void LateUpdate()
+    private void HandleGrabbed(SelectEnterEventArgs args)
     {
-        if (State == ThrowState.Idle || State == ThrowState.Complete) return;
-        // 비행 중 입력도 소비하여 다음 단계로 눌림이 넘어가지 않게 한다.
-        bool confirm = ReadConfirmation();
-        switch (State)
-        {
-            case ThrowState.Selecting:
-                UpdateSelection(confirm);
-                break;
-            case ThrowState.Charging:
-                UpdateCharging(confirm);
-                break;
-            case ThrowState.Result:
-                elapsed += Time.deltaTime;
-                if (elapsed >= resultDuration) ResetAttempt();
-                break;
-        }
+        // 잡기 허용 Layer로 대기 중에만 잡히지만, 다른 경로로 잡혀도 상태를 건너뛰지 않는다.
+        if (State != ThrowState.Ready) return;
+        SetState(ThrowState.Holding);
     }
 
-    private bool ReadConfirmation()
+    private void HandleReleased(SelectExitEventArgs args)
     {
-        InputAction action = rightTrigger != null ? rightTrigger.action : null;
-        if (action == null || !action.enabled)
+        if (State != ThrowState.Holding) return;
+        // 추적 끊김이나 Interactor 비활성화로 취소되면 투척으로 세지 않고 다시 잡게 한다.
+        if (args.isCanceled)
         {
-            if (!reportedMissingInput)
-                Debug.LogError("SabangStone: 영역 선택 중 Right Trigger Action이 없거나 비활성화되었습니다. Input Action Manager와 Action 연결을 확인하세요.", this);
-            reportedMissingInput = true;
-            triggerReleased = false;
-            if (logTriggerDiagnostics) TraceTriggerInput(action, false);
-            return false;
-        }
-        reportedMissingInput = false;
-        bool pressed = action.IsPressed();
-        if (logTriggerDiagnostics) TraceTriggerInput(action, pressed);
-        if (!pressed) triggerReleased = true;
-        bool confirm = pressed && triggerReleased;
-        if (confirm) triggerReleased = false;
-        return confirm;
-    }
-
-    [ContextMenu("진단/오른손 Trigger 연결 확인")]
-    private void ReportTriggerConfiguration()
-    {
-        InputAction action = rightTrigger != null ? rightTrigger.action : null;
-        if (action == null)
-        {
-            Debug.LogWarning("SabangStone 입력 진단: Right Trigger Action이 연결되지 않았습니다.", this);
+            ResetAttempt();
             return;
         }
-        var details = new System.Text.StringBuilder();
-        details.AppendLine($"Action={action.actionMap?.name}/{action.name}, Type={action.type}, Enabled={action.enabled}, State={State}.");
-        foreach (InputBinding binding in action.bindings)
-            details.AppendLine($"Binding={binding.effectivePath}.");
-        foreach (var control in action.controls)
-            details.AppendLine($"Resolved Control={control.path}, Device={control.device.displayName}.");
-        Debug.Log("SabangStone 입력 진단:\n" + details, this);
+        Release();
     }
 
-    private void TraceTriggerInput(InputAction action, bool actionPressed)
+    private void Release()
     {
-        if (!diagnosticRightDevice.isValid)
-            diagnosticRightDevice = UnityEngine.XR.InputDevices.GetDeviceAtXRNode(UnityEngine.XR.XRNode.RightHand);
-        bool devicePressed = false;
-        bool readable = diagnosticRightDevice.isValid && diagnosticRightDevice.TryGetFeatureValue(
-            UnityEngine.XR.CommonUsages.triggerButton, out devicePressed);
-        if (actionPressed != previousActionPressed || devicePressed != previousDevicePressed)
-        {
-            Debug.Log($"SabangStone Trigger 진단: State={State}, DeviceReadable={readable}, DevicePressed={devicePressed}, "
-                + $"Action={action?.actionMap?.name}/{action?.name}, Enabled={action?.enabled}, ActionPressed={actionPressed}, Released={triggerReleased}.", this);
-        }
-        previousActionPressed = actionPressed;
-        previousDevicePressed = devicePressed;
-    }
-
-    private void UpdateSelection(bool confirm)
-    {
-        bool valid = TryGetAimHit(out RaycastHit hit)
-            && InLayers(hit.collider, tileLayers)
-            && map.TryGetRegion(hit, out Map.Region region) && (int)region == targetNumber;
-        UpdateAimColor(valid);
-        if (targetMarker != null)
-        {
-            SetTargetMarker(valid);
-            if (valid) targetMarker.position = hit.point + map.transform.up * markerSurfaceOffset;
-        }
-        if (!confirm || !valid)
-        {
-            if (confirm && logTriggerDiagnostics)
-                Debug.Log($"SabangStone 영역 확정 거부: Collider={hit.collider?.name}, Target={targetNumber}. 목표 칸 내부를 다시 가리키세요.", this);
-            return;
-        }
-        selectedPoint = hit.point;
-        chargingStartedAt = Time.time;
-        uiManager.ShowGauge(requiredPowers[targetNumber - 1], tolerance);
-        SetState(ThrowState.Charging);
-        if (logTriggerDiagnostics)
-            Debug.Log($"SabangStone 영역 확정 성공: Target={targetNumber}, State={State}, Point={selectedPoint}. 게이지 표시를 요청했습니다.", this);
-    }
-
-    private bool TryGetAimHit(out RaycastHit hit)
-    {
-        // XRI의 표시와 확정 위치에 같은 충돌 결과를 사용하여 이중 Raycast를 피한다.
-        if (aimingRay != null)
-        {
-            hit = default;
-            return aimingRay.isActiveAndEnabled && aimingRay.TryGetCurrent3DRaycastHit(out hit);
-        }
-        return Physics.Raycast(rayOrigin.position, rayOrigin.forward, out hit,
-            rayDistance, tileLayers, QueryTriggerInteraction.Collide);
-    }
-
-    private void CaptureAimVisual()
-    {
-        if (capturedAimVisual || aimingRay == null || aimingLineVisual == null) return;
-        originalLineEnabled = aimingLineVisual.enabled;
-        originalSetLineColor = aimingLineVisual.setLineColorGradient;
-        originalValidGradient = aimingLineVisual.validColorGradient;
-        originalInvalidGradient = aimingLineVisual.invalidColorGradient;
-        originalBlockedGradient = aimingLineVisual.blockedColorGradient;
-        validAimGradient = originalValidGradient;
-        invalidAimGradient = originalInvalidGradient;
-        capturedAimVisual = true;
-        aimingLineVisual.setLineColorGradient = true;
-    }
-
-    private void UpdateAimColor(bool valid)
-    {
-        if (!capturedAimVisual || aimingLineVisual == null) return;
-        // Map Collider는 XR Interactable이 아니므로 선 색상을 게임의 구역 판정에 맞춘다.
-        Gradient color = valid ? validAimGradient : invalidAimGradient;
-        aimingLineVisual.validColorGradient = color;
-        aimingLineVisual.invalidColorGradient = color;
-        aimingLineVisual.blockedColorGradient = color;
-    }
-
-    private void RestoreAimVisual()
-    {
-        if (!capturedAimVisual) return;
-        if (aimingLineVisual != null)
-        {
-            aimingLineVisual.enabled = originalLineEnabled;
-            aimingLineVisual.setLineColorGradient = originalSetLineColor;
-            aimingLineVisual.validColorGradient = originalValidGradient;
-            aimingLineVisual.invalidColorGradient = originalInvalidGradient;
-            aimingLineVisual.blockedColorGradient = originalBlockedGradient;
-        }
-        capturedAimVisual = false;
-    }
-
-    private void UpdateCharging(bool confirm)
-    {
-        float power = Mathf.PingPong((Time.time - chargingStartedAt) * powerPerSecond, 100f);
-        uiManager.SetPower(power);
-        if (confirm) Throw(power);
-    }
-
-    private void Throw(float power)
-    {
-        if (State != ThrowState.Charging) return;
-        SelectedPower = power;
-        uiManager?.HideGauge();
-        SetTargetMarker(false);
-        float error = power - Mathf.Clamp(requiredPowers[targetNumber - 1], 0f, 100f);
-        powerMatched = Mathf.Abs(error) <= tolerance;
-        // 적정 파워는 선택 지점에 도달하고, 범위 밖에서는 오차에 비례해 거리가 변한다.
-        float miss = powerMatched ? 0f : Mathf.Sign(error) * (Mathf.Abs(error) - tolerance) * missDistancePerPower;
-        Vector3 up = map.transform.up;
-        Vector3 direction = Vector3.ProjectOnPlane(selectedPoint - throwPoint.position, up).normalized;
-        Vector3 destination = selectedPoint + direction * miss + up * restingCenterHeight;
-        stoneBody.position = throwPoint.position;
-        stoneBody.rotation = throwPoint.rotation;
+        // XRI는 놓을 때 잡기 전의 Kinematic 값을 복원하므로, 같은 프레임 후반의 Detach가 던지는 속도를 적용하도록 물리를 켠다.
         stoneBody.isKinematic = false;
         stoneBody.useGravity = true;
-        stoneBody.angularVelocity = Vector3.zero;
-        // Rigidbody 위치가 아니라 Collider 중심이 목표 높이에 도달하도록 보정한다.
-        Physics.SyncTransforms();
-        Vector3 centerOffset = stoneCollider.bounds.center - stoneBody.position;
-        stoneBody.linearVelocity = (destination - centerOffset - stoneBody.position) / flightTime
-            - 0.5f * Physics.gravity * flightTime;
         elapsed = stableTime = 0f;
         touchedBorder = landed = false;
         groundContacts.Clear();
         SetState(ThrowState.Flying);
+    }
+
+    private void Update()
+    {
+        if (State != ThrowState.Result) return;
+        elapsed += Time.deltaTime;
+        if (elapsed >= resultDuration) ResetAttempt();
     }
 
     private void FixedUpdate()
@@ -376,26 +208,19 @@ public class SabangStone : MonoBehaviour
     private void FinishThrow(bool timedOut)
     {
         if (State != ThrowState.Flying) return;
-        bool success = !timedOut && powerMatched && !touchedBorder
-            && map.TryGetRegion(GetCenterOnBoard(), out Map.Region region)
-            && (int)region == targetNumber;
+        // 바닥에 안정된 망의 중심을 놀이판 면으로 내려 판정한다. Collider 높이나 놓인 방향에 따라 결과가 바뀌지 않게 한다.
+        bool onTile = map.TryGetRegion(map.ProjectToSurface(stoneCollider.bounds.center), out Map.Region region)
+            && region >= Map.Region.Tile1 && region <= Map.Region.Tile8;
+        bool success = !timedOut && !touchedBorder && onTile
+            && (IsClaiming || (int)region == targetNumber);
+        LandedTile = success ? (int)region : 0;
         FreezeStone();
         elapsed = 0f;
-        uiManager?.HideGauge();
-        SetTargetMarker(false);
         uiManager.ShowThrowResult(success);
         if (!success) FailureCount++;
         SetState(success ? ThrowState.Complete : ThrowState.Result);
         if (success) onThrowSucceeded.Invoke();
         else onThrowFailed.Invoke();
-    }
-
-    // 바닥에 안정된 망의 중심을 놀이판 면으로 내려 판정한다. Collider 높이나 놓인 방향에 따라 결과가 바뀌지 않게 한다.
-    private Vector3 GetCenterOnBoard()
-    {
-        Vector3 up = map.transform.up;
-        Vector3 center = stoneCollider.bounds.center;
-        return center - Vector3.Project(center - selectedPoint, up);
     }
 
     private void FreezeStone()
@@ -429,7 +254,7 @@ public class SabangStone : MonoBehaviour
         if (InLayers(other, borderLayers)) touchedBorder = true;
     }
 
-    // 비행 속도가 그대로 남으면 착지 후 미끄러져 목표 칸을 벗어나므로 첫 착지에서 한 번만 줄인다.
+    // 던진 속도가 그대로 남으면 착지 후 미끄러져 목표 칸을 벗어나므로 첫 착지에서 한 번만 줄인다.
     private void DampLanding()
     {
         landed = true;
@@ -450,61 +275,54 @@ public class SabangStone : MonoBehaviour
         return other != null && (layers.value & (1 << other.gameObject.layer)) != 0;
     }
 
-    private bool PrepareUI()
+    // Interactable을 끄면 XRI의 놓기 처리(던지는 속도 적용)가 생략되므로 Interaction Layer로만 잡기를 막는다.
+    private void ApplyGrabPermission()
     {
-        if (uiManager == null)
-            return ConfigurationError("UIManager를 별도 UI 오브젝트에 추가하고 UI Manager에 연결하세요.");
-        uiManager.PreserveExistingReferences(gaugeRoot, powerSlider, successBand, resultText);
-        return true;
+        if (grabInteractable == null) return;
+        if (!capturedGrabLayers)
+        {
+            originalGrabLayers = grabInteractable.interactionLayers;
+            capturedGrabLayers = true;
+        }
+        bool allowed = State == ThrowState.Ready || State == ThrowState.Holding;
+        grabInteractable.interactionLayers = allowed ? originalGrabLayers : (InteractionLayerMask)0;
     }
 
-#if UNITY_EDITOR
-    [ContextMenu("UI/기존 HUD 참조를 UIManager로 복사")]
-    private void CopyExistingUIReferences()
+    private void CancelHolding()
     {
-        if (uiManager == null)
-        {
-            ConfigurationError("먼저 UI Manager를 연결하세요.");
-            return;
-        }
-        UnityEditor.Undo.RecordObject(uiManager, "Copy existing Sabang HUD references");
-        uiManager.PreserveExistingReferences(gaugeRoot, powerSlider, successBand, resultText);
-        UnityEditor.EditorUtility.SetDirty(uiManager);
-        if (uiManager.gameObject.scene.IsValid())
-            UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(uiManager.gameObject.scene);
+        if (grabInteractable == null || !grabInteractable.isSelected || grabInteractable.interactionManager == null) return;
+        grabInteractable.interactionManager.CancelInteractableSelection((IXRSelectInteractable)grabInteractable);
     }
-#endif
-    private void SetTargetMarker(bool visible)
-    {
-        if (targetMarker != null && targetMarker.gameObject.activeSelf != visible)
-            targetMarker.gameObject.SetActive(visible);
-    }
+
     private void OnDisable()
     {
-        FreezeStone();
-        uiManager?.HideGauge();
-        uiManager?.ClearResult();
-        SetTargetMarker(false);
-        SetState(ThrowState.Idle);
-        RestoreAimVisual();
+        StopThrowing();
+        if (subscribedGrab != null)
+        {
+            subscribedGrab.selectEntered.RemoveListener(HandleGrabbed);
+            subscribedGrab.selectExited.RemoveListener(HandleReleased);
+            if (capturedGrabLayers) subscribedGrab.interactionLayers = originalGrabLayers;
+        }
+        subscribedGrab = null;
+        capturedGrabLayers = false;
     }
 
     public void StopThrowing()
     {
-        FreezeStone();
-        uiManager?.HideGauge();
-        uiManager?.ClearResult();
-        SetTargetMarker(false);
+        // 먼저 Idle로 바꿔 취소로 인한 놓기 알림이 재시도로 처리되지 않게 한다.
         SetState(ThrowState.Idle);
-        RestoreAimVisual();
+        CancelHolding();
+        FreezeStone();
+        IsClaiming = false;
+        LandedTile = 0;
+        uiManager?.ClearResult();
     }
 
     private void SetState(ThrowState next)
     {
         if (State == next) return;
         State = next;
-        if (capturedAimVisual && aimingLineVisual != null)
-            aimingLineVisual.enabled = next == ThrowState.Selecting;
+        ApplyGrabPermission();
         StateChanged?.Invoke(next);
     }
 }

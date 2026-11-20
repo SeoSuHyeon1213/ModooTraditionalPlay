@@ -5,8 +5,8 @@
 - 목표: 1인용 사방치기 8칸의 선택·투척·QTE 이동·복귀·망 줍기·땅따먹기·클리어 흐름을 완성한다.
 - 개발 담당: Claude. 작업 지휘·이미지 제작·결과 검토: GPT. 씬·Inspector 연결과 HMD 체험 확인: 사용자.
 - 완료 조건: 필수 기능과 연결을 갖추고 관련 컴파일·Play Mode 검증을 마친다. VR 체험 관련 항목은 HMD 확인 결과를 별도로 남긴다.
-- 현재 단계: 원격 `d98dba0`와 로컬 지침의 통합. 원격의 최소 라운드 완료 및 다음 목표 진행 코드를 반영했다. 이번 병합에서는 Unity·HMD 동작을 재검증하지 않았다.
-- 다음 할 일: 프로토타입 7번 일반 이동 잠금의 Inspector 연결과 실행을 확인한다. 원격에서 8번 최소 라운드 종료 신호가 추가되었으므로 이를 새로 재구현하지 않고 검증하며, 임시 투척 성공 자동 진행과 실제 이동·복귀 완료를 구분한다.
+- 현재 단계: 작업 20261120-003에서 땅따먹기·클리어·다시 하기 코드를 추가했다. 20261120-002의 Grab 투척과 함께 컴파일은 통과했고, Inspector 연결과 Play Mode 검증이 남았다.
+- 다음 할 일: 사용자가 Grab 투척 연결(`Stone Collider`, `Grab Interactable`, `PlayHUD` World Space)과 땅따먹기 연결(`SabangLandMarker`, 클리어 패널, 다시 하기 버튼)을 마친 뒤 `Last Target Number`를 1로 낮춰 1번 라운드 → 땅따먹기 → 클리어 → 다시 하기를 Play Mode에서 확인한다. 7번 이동 잠금·복원과 `JumpProvider` 잠금 여부도 남아 있다.
 - 미확인 사항: 기존 체크의 실행 근거, 실제 Inspector 연결과 HMD 동작은 다음 개발 작업에서 확인한다. 아직 확인하지 않은 상태를 실패나 완료로 단정하지 않는다.
 - 현재 진행 기록은 이 파일로 관리한다. `docs/사방치기_구현_체크리스트.md`는 이전 참고본이며 자동 동기화 대상으로 보지 않는다.
 
@@ -54,6 +54,46 @@
 - [ ] 종료한 작업의 지시서·결과·검토를 `archive/<작업번호>/`에 보존하고 참조 경로를 갱신했다.
 - [ ] 외부 공개·배포 작업이면 대상 결과물과 사용자의 명시적인 승인을 기록한 뒤 실행했다.
 
+### 20261120-001 작업 기록
+
+- 작업 번호 / 날짜: 20261120-001 / 2026-11-20.
+- 사용자 요청과 목표: 우선 작업 확인, `Assets/_Recovery` 삭제, 사용자가 연결한 `SabangGameManager` 이동 잠금 확인.
+- 담당 / 인수자: Claude(확인·기록) / 사용자(Inspector 연결, Play Mode 확인).
+- 수정 대상 / 제외 범위: `Assets/_Recovery`와 `.meta` 삭제(휴지통), 이 체크리스트. 코드와 씬은 수정하지 않았다.
+- 완료 조건: 7번 연결이 저장된 씬에 있고, 7·8번이 Play Mode에서 확인된다.
+- 현재 단계: 검증. 연결 확인은 끝났고 Play Mode 확인이 남았다.
+- 실제 변경과 필요한 Inspector 연결: 사용자가 `Manual Movement Components`에 이동·스냅 회전·텔레포트 Provider 3개를 연결했다.
+- 결정과 근거: `com.coplaydev.unity-mcp` 제거는 사용자가 의도한 변경으로 확인했다. XR Rig의 `JumpProvider`(우측 A 버튼)는 활성 상태지만 잠금 목록에 없다. `ContinuousTurnProvider`는 `ControllerInputActionManager`의 Smooth Turn이 꺼져 있어 입력이 비활성이고, Grab Move 오브젝트는 비활성이다.
+- 차단 원인 / 다음 실행 항목: CLI로 Editor를 조작할 Pipeline 패키지가 없어 Play Mode를 직접 실행하지 못했다. 사용자가 Editor에서 7·8번을 확인하거나 패키지 설치를 승인한다.
+- 지시서 / 결과 / 검토 기록 경로: 사용자 직접 요청이라 우편함 기록은 만들지 않았다.
+
+### 20261120-002 작업 기록
+
+- 작업 번호 / 날짜: 20261120-002 / 2026-11-20.
+- 사용자 요청과 목표: 테스트 중 투척 UI가 보이지 않는 문제 확인, 망을 XR 기본 템플릿의 Grab으로 직접 잡아 던지는 방식으로 교체.
+- 담당 / 인수자: Claude(코드·기록) / 사용자(Inspector 연결, Canvas 설정, Play Mode·HMD 확인).
+- 수정 대상 / 제외 범위: `SabangStone.cs`, `UIManager.cs`, `SabangGameManager.cs`, `Map.cs`, 이 체크리스트. 씬·프리팹은 수정하지 않았다. 땅따먹기 투척과 망 줍기는 범위 밖이다.
+- 완료 조건: Grab으로 던진 망이 목표 칸 착지·경계선 미접촉일 때만 성공하고, 실패 시 Throw Point로 돌아와 다시 잡을 수 있다.
+- 현재 단계: 검증. 코드와 컴파일은 끝났고 Inspector 연결과 Play Mode가 남았다.
+- 실제 변경과 필요한 Inspector 연결: Ray 위치 선택·Trigger 파워 게이지 코드를 제거했다. `XRGrabInteractable`의 잡기·놓기 이벤트로 투척하고, 잡기 허용은 Interaction Layer로 제어한다. UIManager는 게이지 대신 목표 칸 안내 문구를 표시하고 Overlay Canvas면 경고한다. `Map.ProjectToSurface`를 추가했다. 연결: `SabangStone`의 `Stone Collider`(망의 Convex Mesh Collider), `Grab Interactable`(망의 XR Grab Interactable).
+- 결정과 근거: 사용자 결정 — 성공은 착지 위치만, 기존 방식은 교체, 잡기는 투척 대기 중에만, 힘은 `Throw Velocity Scale`로만 조정. XRI는 놓을 때 잡기 전 Kinematic 값을 복원하므로 놓기 이벤트에서 물리를 켜야 Detach의 속도가 적용된다. Interactable을 끄면 Detach가 생략될 수 있어 Interaction Layer를 비워 잡기를 막는다. `ThrowState` 값 이름은 바꿨지만 정수 순서와 개수는 유지했다(씬에 직렬화되지 않음).
+- 차단 원인 / 다음 실행 항목: Editor에 Pipeline 패키지가 없어 Play Mode를 직접 실행하지 못했다. `사방치기규칙_구체화.txt`는 사용자 승인으로 3장 진행 순서, 4장 돌 잡기와 던지기, 11장 필요 오브젝트·상태, 12장 조절값을 Grab 방식으로 갱신했다. 9장 자기 땅 던지기도 사용자 결정으로 Grab 직접 투척으로 바꿨다. 뒤로 던지기는 빠른 신체 회전을 요구하므로 놀이판을 바라보고 던지는 것으로 정했다. 땅따먹기 코드는 아직 구현하지 않았다.
+- 지시서 / 결과 / 검토 기록 경로: 사용자 직접 요청이라 우편함 기록은 만들지 않았다.
+
+### 20261120-003 작업 기록
+
+- 작업 번호 / 날짜: 20261120-003 / 2026-11-20.
+- 사용자 요청과 목표: 땅따먹기 코드 구현. 규칙 문서 9장(Grab 직접 투척, 놀이판을 바라보고 던지기)을 따른다.
+- 담당 / 인수자: Claude(코드·기록) / 사용자(오브젝트·UI 구성, Inspector 연결, Play Mode·HMD 확인).
+- 수정 대상 / 제외 범위: `SabangStone.cs`, `SabangGameManager.cs`, `UIManager.cs`, `Map.cs`, 새 `SabangLandMarker.cs`, 이 체크리스트. 씬은 수정하지 않았다. 전진·회전·복귀·망 줍기는 범위 밖이며 `Complete Round On Throw Success` 임시 진행을 그대로 쓴다.
+- 완료 조건: 마지막 라운드 성공 후 땅따먹기로 넘어가고, 1~8번 칸 착지 시 자기 땅 표시와 클리어 화면(시간·실패 횟수·칸 번호)이 나오며, 다시 하기로 1번 라운드부터 초기화되어 시작한다.
+- 현재 단계: 검증. 코드와 컴파일은 끝났고 연결과 Play Mode가 남았다.
+- 실제 변경과 필요한 Inspector 연결: `SabangStone`에 땅따먹기 투척 모드(`TryBeginClaim`, `IsClaiming`, `LandedTile`, `ResetFailureCount`, 선택 `Claim Throw Point`)를 추가했다. `SabangGameManager`는 마지막 라운드 후 `ClaimingLand`, 성공 시 `Cleared`로 전환하고 플레이 시간·실패 횟수를 기록하며 `RestartGame`을 제공한다. `Map.TryGetRegionOutline`을 추가했다. `UIManager`는 땅따먹기 안내, 클리어 패널, `RetryButton`을 제공한다. 연결 방법은 아래 Inspector 연결 절을 따른다.
+- 결정과 근거: 칸 표시는 사용자가 배치한 Mesh Filter·Mesh Renderer 오브젝트에 런타임 메쉬를 넣는 방식으로 했다(씬 오브젝트 자동 생성 금지 원칙). 위치 이동은 `UIDoor`와 같은 `XROrigin.MoveCameraToWorldLocation`을 쓰고 방향은 `MatchOriginUpCameraForward`로 맞춰 실제 몸 회전을 요구하지 않는다. `UIManager`가 `SabangGameManager.StateChanged`를 구독해 순환 참조를 만들지 않았다. 자기 땅 표시와 이동 위치는 선택 사항이라 비워도 클리어는 진행된다.
+- 차단 원인 / 다음 실행 항목: Unity MCP 브리지·Pipeline 패키지가 없어 Play Mode를 직접 실행하지 못했다. 클리어 화면에서 다시 하기를 누르지 않으면 `Cleared`에 머물러 `UIDoor` 시작 안내가 다시 나오지 않는다. 나가기 동작이 필요하면 별도로 정한다.
+- Inspector 연결: ① 자기 땅 표시용 빈 오브젝트에 Mesh Filter·Mesh Renderer(색상 또는 문양 Material)를 추가하고 Collider는 두지 않는다. ② 별도 오브젝트에 `SabangLandMarker`를 추가해 `Map`, `Land Fill`(①의 Mesh Filter)을 연결한다. ③ `SabangGameManager`에 `Land Marker`, 필요하면 `Claim Spawn Point`·`Start Spawn Point`·`XR Origin`을 연결한다. ④ World Space Canvas에 클리어 패널(TMP 텍스트, 다시 하기 버튼)을 만들고 `UIManager`의 `Clear Panel`, `Clear Text`에 연결하며 버튼 OnClick에 `UIManager.RetryButton`을 연결한다. ⑤ 땅따먹기 위치가 시작 위치와 다르면 `SabangStone`의 `Claim Throw Point`를 연결한다.
+- 지시서 / 결과 / 검토 기록 경로: 사용자 직접 요청이라 우편함 기록은 만들지 않았다.
+
 ## 관리 규칙
 
 - 세부 구현은 `Assets/Script/사방치기규칙_구체화.txt`를 우선 기준으로 한다. 전체 체험 방향과 확장 후보는 `Assets/한국 전통놀이 VR 체험 기획서.pdf`를 참고한다.
@@ -68,12 +108,12 @@
 아래 항목을 위에서부터 순서대로 구현하고 Play Mode에서 확인한다. 이 흐름이 완료되면 이후 필수 기능을 확장한다.
 
 - [x] **1. 게임 시작 최소 흐름** — `UIDoor`에서 시작을 선택하고 `SpawnPoint`로 이동한 뒤 `SabangGameManager.TryStartGame()`을 호출한다.
-- [x] **2. 망과 투척 참조 연결** — `SabangStone`의 Rigidbody, Collider, Throw Point, Ray Origin, 오른손 Trigger, `Map`을 Inspector에서 연결한다.
-- [x] **3. 첫 목표 칸 선택** — 1번 칸만 대상으로 Ray가 칸 내부를 가리킬 때 위치를 선택한다. 칸 밖과 경계선 근처 입력은 무시한다.
-- [x] **4. 파워 게이지와 투척** — 0~100 왕복 게이지를 표시하고 Trigger 재입력 시 파워를 확정해 망을 물리적으로 발사한다.
-- [x] **5. 투척 결과와 재시도** — 적정 파워·목표 칸 착지·경계선 미접촉을 성공으로 처리하고, 나머지는 투척 모션 후 “실패” UI를 표시한 뒤 위치 선택으로 돌아간다.
-- [x] **6. 상태 알림 확인** — `Ready → SelectingPosition → SelectingPower → Throwing` 상태가 중복 없이 전환되고, 성공 시 `MovingForward` 이벤트가 한 번 호출되는지 확인한다.
-- [ ] **7. 일반 이동 잠금** — 게임 시작 시 Inspector에 연결한 일반 이동·회전·자유 텔레포트 컴포넌트만 비활성화하고, 중단 시 원래 활성 상태로 복원한다.
+- [ ] **2. 망과 투척 참조 연결** — `SabangStone`의 Rigidbody, Collider, XR Grab Interactable, Throw Point, `Map`을 Inspector에서 연결한다. 20261120-002에서 Ray Origin·오른손 Trigger 대신 Grab Interactable 연결로 바뀌었다. 저장된 씬에서 `Stone Collider`가 비어 있고 `Grab Interactable`은 새 필드라 다시 연결해야 한다.
+- [ ] **3. 첫 목표 칸 선택** — 해당 없음 — Grab 투척으로 교체(20261120-002). 목표 칸 번호는 결과 문구 자리에 안내한다.
+- [ ] **4. Grab 투척** — Throw Point의 망을 Grip으로 잡아 손으로 던지고, 놓는 순간의 손 속도로 날아간다. 잡기는 투척 대기 중에만 허용한다. 코드 완료(20261120-002), Inspector 연결 대기. 기존 파워 게이지 방식은 해당 없음 — Grab 투척으로 교체(20261120-002).
+- [x] **5. 투척 결과와 재시도** — 목표 칸 착지·경계선 미접촉을 성공으로 처리하고, 나머지는 착지 후 “실패” UI를 표시한 뒤 망을 Throw Point로 돌려 잡기 대기로 돌아간다. 20261120-002에서 적정 파워 조건을 뺐다.
+- [x] **6. 상태 알림 확인** — `Ready → SelectingPosition → SelectingPower → Throwing` 상태가 중복 없이 전환되고, 성공 시 `MovingForward` 이벤트가 한 번 호출되는지 확인한다. 20261120-002 이후 `SelectingPosition`은 망 잡기 대기, `SelectingPower`는 망을 든 상태를 뜻한다. 새 방식의 전환은 다시 확인해야 한다.
+- [x] **7. 일반 이동 잠금** — 게임 시작 시 Inspector에 연결한 일반 이동·회전·자유 텔레포트 컴포넌트만 비활성화하고, 중단 시 원래 활성 상태로 복원한다. 연결 완료(20261120-001): `SaBang.unity`의 `Manual Movement Components`에 XR Origin (XR Rig)의 `DynamicMoveProvider`, `SnapTurnProvider`, `TeleportationProvider`. Play Mode 검증은 미실행이다.
 - [x] **8. 최소 라운드 종료 신호** — 외부 테스트 메서드나 임시 이벤트로 라운드 완료를 전달하고 다음 목표 칸으로 넘어갈 연결 지점을 확인한다. 코드 완료: `SabangGameManager.CompleteRound()`와 임시 옵션 `Complete Round On Throw Success`.
 
 프로토타입 1차 완료 기준은 1번 칸에 망을 선택·투척하고, 성공·실패 결과가 표시되며, 실패 후 같은 시도를 재개하고, 성공 결과가 이동 단계로 전달되는 것이다. 실제 전진 QTE, 복귀, 망 줍기, 땅따먹기는 이 기준을 통과한 뒤 구현한다.
@@ -86,7 +126,7 @@
 - [ ] 준비, 위치 선택, 파워 선택, 투척, 전진, 회전, 복귀, 망 줍기, 라운드 완료, 땅따먹기, 클리어 상태를 관리한다.
 - [ ] 플레이 중 일반 이동 입력을 잠근다.
 - [ ] 목표 칸을 1번부터 8번까지 순서대로 관리한다.
-- [ ] 전체 실패 횟수와 플레이 시간을 기록한다.
+- [ ] 전체 실패 횟수와 플레이 시간을 기록한다. 코드 완료(20261120-003), Inspector 연결·Play Mode 확인 대기.
 
 ### 2. 놀이판과 구역 판정
 
@@ -98,19 +138,23 @@
 - [ ] 1·2·3·6번 외발 칸과 4·5번, 7·8번 양발 칸의 속성을 정의한다.
 - [ ] 나란한 칸에서 왼쪽은 왼손, 오른쪽은 오른손에 대응한다.
 
-### 3. 망 위치 선택과 투척
+### 3. 망 투척 (Grab)
 
-- [x] 오른손 컨트롤러 Ray로 현재 목표 칸 내부 위치를 가리킨다.
-- [x] 목표 칸 밖 또는 경계선 근처에서는 위치를 확정할 수 없게 한다.
-- [x] 첫 Trigger 입력으로 망의 목표 위치를 확정한다.
-- [x] 0부터 100까지 왕복하는 파워 게이지를 표시한다.
-- [x] Trigger를 놓았다가 다시 누르면 현재 파워를 확정한다.
-- [x] 1번부터 8번까지의 필요 파워와 기본 허용 범위 ±10을 설정한다.
-- [x] 파워 부족, 적정, 초과에 맞는 실제 투척 비행을 보인다.
+- [ ] 투척 대기 중 망을 Throw Point에 두고 목표 칸 번호를 안내한다.
+- [ ] XR Grab Interactable로 망을 잡고, 놓을 때의 손 속도로 던진다. 던지는 힘은 `Throw Velocity Scale`로 조절한다.
+- [ ] 투척 대기·들고 있는 동안에만 잡기를 허용하고, 비행·결과 중에는 잡을 수 없게 한다.
+- [ ] 잡은 상태에서 추적 끊김 등으로 취소되면 실패로 세지 않고 다시 잡게 한다.
+- [ ] 오른손 컨트롤러 Ray로 현재 목표 칸 내부 위치를 가리킨다. 해당 없음 — Grab 투척으로 교체(20261120-002).
+- [ ] 목표 칸 밖 또는 경계선 근처에서는 위치를 확정할 수 없게 한다. 해당 없음 — Grab 투척으로 교체(20261120-002).
+- [ ] 첫 Trigger 입력으로 망의 목표 위치를 확정한다. 해당 없음 — Grab 투척으로 교체(20261120-002).
+- [ ] 0부터 100까지 왕복하는 파워 게이지를 표시한다. 해당 없음 — Grab 투척으로 교체(20261120-002).
+- [ ] Trigger를 놓았다가 다시 누르면 현재 파워를 확정한다. 해당 없음 — Grab 투척으로 교체(20261120-002).
+- [ ] 1번부터 8번까지의 필요 파워와 기본 허용 범위 ±10을 설정한다. 해당 없음 — Grab 투척으로 교체(20261120-002).
+- [ ] 파워 부족, 적정, 초과에 맞는 실제 투척 비행을 보인다. 해당 없음 — Grab 투척으로 교체(20261120-002).
 - [x] 망 중심이 목표 칸 안에 있는지 판정한다.
 - [x] 망이 경계선에 접촉했는지 판정한다.
-- [x] 적정 파워, 목표 칸 착지, 경계선 미접촉을 모두 만족할 때만 성공 처리한다.
-- [x] 파워가 허용 범위를 벗어나면 목표 칸에 떨어져도 실패 처리한다.
+- [x] 목표 칸 착지, 경계선 미접촉을 모두 만족할 때만 성공 처리한다. 20261120-002에서 적정 파워 조건을 뺐다.
+- [ ] 파워가 허용 범위를 벗어나면 목표 칸에 떨어져도 실패 처리한다. 해당 없음 — Grab 투척으로 교체(20261120-002).
 - [x] 실패 시 투척 모션을 끝까지 보인 뒤 실패 UI를 표시한다.
 - [x] 실패 후 같은 목표 칸의 위치 선택 단계부터 다시 시작한다.
 - [x] 실패 횟수는 투척 시도당 한 번만 증가한다.
@@ -144,21 +188,22 @@
 ### 6. 라운드 완료와 땅따먹기
 
 - [ ] 라운드 성공 시 목표 칸을 1 증가시키고 다음 라운드를 시작한다.
-- [ ] 8번 목표 라운드까지 성공하면 땅따먹기 단계로 전환한다.
-- [ ] 땅따먹기 시작 시 플레이어를 1번 칸 앞의 지정 위치로 이동시킨다.
-- [ ] Trigger 파워 게이지로 땅따먹기 망 투척을 처리한다.
-- [ ] 1번부터 8번 중 경계선에 닿지 않은 착지 칸을 자기 땅으로 확정한다.
-- [ ] 땅따먹기 실패 시 즉시 다시 시도한다.
-- [ ] 자기 땅 칸의 색상 또는 문양을 변경한다.
-- [ ] 첫 번째 자기 땅을 획득하면 게임 클리어 처리한다.
-- [ ] 클리어 UI에 완료 시간과 전체 실패 횟수를 표시한다.
-- [ ] 다시 하기에서 목표 칸, 망 위치, 자기 땅, 시간, 실패 횟수를 초기화한다.
+- [ ] 8번 목표 라운드까지 성공하면 땅따먹기 단계로 전환한다. `Last Target Number`로 전환 라운드를 줄여 테스트할 수 있다. 코드 완료(20261120-003), Inspector 연결·Play Mode 확인 대기.
+- [ ] 땅따먹기 시작 시 플레이어를 1번 칸 앞의 지정 위치로 이동시키고 놀이판을 바라보게 한다. `Claim Spawn Point`를 비우면 현재 위치에서 진행한다. 코드 완료(20261120-003), Inspector 연결·Play Mode 확인 대기.
+- [ ] 투척 단계와 같은 Grab 직접 투척으로 땅따먹기 망 투척을 처리한다. 목표 칸 없이 1~8번 중 착지한 칸을 판정한다(20261120-002 규칙 변경). 코드 완료(20261120-003), Inspector 연결·Play Mode 확인 대기.
+- [ ] 1번부터 8번 중 경계선에 닿지 않은 착지 칸을 자기 땅으로 확정한다. 하늘 구역과 놀이판 밖은 실패다. 코드 완료(20261120-003), Inspector 연결·Play Mode 확인 대기.
+- [ ] 땅따먹기 실패 시 즉시 다시 시도한다. 코드 완료(20261120-003), Inspector 연결·Play Mode 확인 대기.
+- [ ] 자기 땅 칸의 색상 또는 문양을 변경한다. `SabangLandMarker`가 칸 모양 메쉬를 만들어 지정 Material로 채운다. 코드 완료(20261120-003), Inspector 연결·Play Mode 확인 대기.
+- [ ] 첫 번째 자기 땅을 획득하면 게임 클리어 처리한다. 코드 완료(20261120-003), Inspector 연결·Play Mode 확인 대기.
+- [ ] 클리어 UI에 완료 시간과 전체 실패 횟수를 표시한다. 얻은 칸 번호도 함께 표시한다. 코드 완료(20261120-003), Inspector 연결·Play Mode 확인 대기.
+- [ ] 다시 하기에서 목표 칸, 망 위치, 자기 땅, 시간, 실패 횟수를 초기화한다. `Start Spawn Point`를 연결하면 시작 위치로 되돌린다. 코드 완료(20261120-003), Inspector 연결·Play Mode 확인 대기.
 
 ## 필수 항목 검증
 
-- [ ] Inspector에 Map, Rigidbody, Collider, Throw Point, Ray Origin, 입력 Action, UI, Layer Mask 참조를 연결한다.
+- [ ] Inspector에 Map, Rigidbody, Collider, XR Grab Interactable, Throw Point, UI, Layer Mask 참조를 연결한다.
 - [ ] 1번부터 8번까지 목표 칸별 투척 성공을 확인한다.
-- [ ] 파워 부족, 적정, 초과 투척의 착지와 결과를 확인한다.
+- [ ] Grab으로 약하게·적당히·세게 던진 착지와 결과를 확인한다. 7·8번 칸까지 던질 수 있는지 보고 `Throw Velocity Scale`을 조정한다.
+- [ ] 파워 부족, 적정, 초과 투척의 착지와 결과를 확인한다. 해당 없음 — Grab 투척으로 교체(20261120-002).
 - [ ] 경계선 접촉, 다른 칸 착지, 놀이판 밖 착지를 실패로 확인한다.
 - [ ] 실패 후 동일 목표 칸을 다시 선택할 수 있는지 확인한다.
 - [ ] 외발, 양발, 목표 칸이 있는 양발 구역의 QTE를 각각 확인한다.
@@ -178,6 +223,14 @@
 | 라운드 진행 1→5번 (2026-10-21) | Play Mode, Stone Collider를 실행 중에만 임시 연결, 각 칸 중심에 필요 파워로 `Throw` 호출 | 통과 | 착지 감속과 판정 위치 보정 후 1~5번이 연속 성공했고, 목표 칸이 `RoundComplete`를 거쳐 1씩 증가했다. 6~8번 성공은 미확인이다. |
 | 6번 칸 파워 0·100 (2026-10-21) | 같은 방법 | 통과 | 둘 다 실패 처리되었고 실패 횟수가 1씩 늘었으며, 같은 6번 목표의 위치 선택으로 돌아갔다. |
 | Stone Collider 재연결 후 1→3번 (2026-10-21) | 임시 연결 없이 Play Mode에서 같은 방법으로 호출 | 통과 | 1~3번이 연속 성공해 목표가 4번으로 넘어갔고, 4번 파워 0은 실패 처리되었다. |
+| 이동 잠금 연결 (2026-11-20, 20261120-001) | 저장된 `SaBang.unity`의 `manualMovementComponents` 값과 스크립트 GUID 대조 | 통과 | `DynamicMoveProvider`, `SnapTurnProvider`, `TeleportationProvider` 3개가 연결되었다. `UIDoor`의 SpawnPoint 이동은 `XROrigin.MoveCameraToWorldLocation`을 써서 `TeleportationProvider` 비활성화의 영향을 받지 않는다. |
+| 컴파일·Console (2026-11-20, 20261120-001) | Editor.log에서 `error CS`, 예외 검색 | 통과 | 컴파일 오류와 예외가 없다. Console 창을 직접 보지는 않았다. |
+| 7번 이동 잠금·복원, 8번 라운드 진행 Play Mode (2026-11-20) | 미실행 | 미실행 | 열린 Editor에 `com.unity.pipeline`이 없어 CLI로 Play Mode를 조작할 수 없다. Editor에서 직접 확인이 필요하다. |
+| 게이지 UI 미표시 원인 (2026-11-20, 20261120-002) | 사용자 Play Mode 로그와 `SaBang.unity`의 Canvas 설정 대조 | 문제 확인 | 로그상 위치 확정 후 게이지 표시 요청까지 정상 진행되었다. `GaugeRoot`·`ResultText`의 `PlayHUD` Canvas가 Screen Space - Overlay라 HMD에 그려지지 않는다. 다른 UI(`UI`, `GameUI`)는 World Space다. |
+| 컴파일 (20261120-002) | `dotnet build Assembly-CSharp.csproj`(출력은 임시 폴더) | 통과 | 오류 0개. 변경 파일(`SabangStone`, `UIManager`, `SabangGameManager`, `Map`)에서 나온 경고는 없다. Unity Editor 재컴파일과 Console 확인은 미실행이다. |
+| Grab 투척 Play Mode·HMD (20261120-002) | 미실행 | 미실행 | Inspector 연결(`Stone Collider`, `Grab Interactable`)과 `PlayHUD` World Space 전환이 먼저 필요하다. |
+| 컴파일 (20261120-003) | 새 `SabangLandMarker.cs`를 포함한 임시 래퍼 csproj로 `dotnet build`(출력은 임시 폴더, 래퍼는 삭제) | 통과 | 오류 0개. 변경 파일에서 나온 경고는 없다. Unity MCP 브리지는 연결되지 않아 Editor 재컴파일·Console 확인은 미실행이다. |
+| 땅따먹기·클리어·다시 하기 Play Mode·HMD (20261120-003) | 미실행 | 미실행 | Inspector 연결과 클리어 UI 구성이 먼저 필요하다. |
 
 결과는 통과 / 실패 / 미실행 / 해당 없음으로 구분하고 필요한 근거를 적는다.
 
@@ -190,12 +243,12 @@
 
 ### 플레이 경험과 조정
 
-- [ ] 파워 게이지 속도, 칸별 필요 파워, 허용 범위를 플레이 테스트로 조정한다.
+- [ ] 파워 게이지 속도, 칸별 필요 파워, 허용 범위를 플레이 테스트로 조정한다. 해당 없음 — Grab 투척으로 교체(20261120-002).
 - [ ] QTE 속도와 성공 구간을 난이도별로 조정한다.
 - [ ] 이동과 회전 연출 시간을 조정해 VR 멀미를 줄인다.
 - [ ] 성공, 실패, 망 착지, 망 줍기 사운드와 햅틱을 추가한다.
 - [ ] 목표 칸, 선택 위치, 성공 구간을 알리는 월드 UI를 개선한다.
-- [ ] 실패 원인을 파워 부족, 파워 초과, 경계선 접촉, 다른 칸 착지로 구분해 표시한다.
+- [ ] 실패 원인을 경계선 접촉, 다른 칸 착지, 놀이판 밖 착지로 구분해 표시한다.
 
 ### 기획서 기반 확장
 

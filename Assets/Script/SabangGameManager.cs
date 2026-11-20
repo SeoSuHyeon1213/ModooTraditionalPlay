@@ -2,6 +2,7 @@
 using UnityEngine;
 using UnityEngine.Events;
 using System.Collections.Generic;
+using Unity.XR.CoreUtils;
 using UnityEngine.XR.Interaction.Toolkit.Interactors;
 
 public class SabangGameManager : MonoBehaviour
@@ -28,14 +29,33 @@ public class SabangGameManager : MonoBehaviour
     [SerializeField] private bool completeRoundOnThrowSuccess = true;
     [Tooltip("투척 성공 결과를 보여 준 뒤 다음 목표 칸을 시작하기까지의 시간(초)")]
     [SerializeField, Min(0f)] private float nextRoundDelay = 1.5f;
-    [Tooltip("이 번호의 라운드까지 성공하면 진행을 멈춘다. 땅따먹기 구현 전 범위를 줄여 테스트할 때 사용한다.")]
+    [Tooltip("이 번호의 라운드까지 성공하면 땅따먹기로 넘어간다. 기본은 8이며, 테스트 때 줄여서 땅따먹기를 빨리 확인할 수 있다.")]
     [SerializeField, Range(1, 8)] private int lastTargetNumber = 8;
+
+    [Header("땅따먹기와 클리어")]
+    [Tooltip("자기 땅으로 얻은 칸을 표시한다. 비우면 표시 없이 클리어만 처리한다.")]
+    [SerializeField] private SabangLandMarker landMarker;
+    [Tooltip("선택 사항. 땅따먹기 시작 시 플레이어를 옮길 1번 칸 앞 위치. 파란 축(forward)이 놀이판을 향하게 둔다. 비우면 현재 위치에서 진행한다.")]
+    [SerializeField] private Transform claimSpawnPoint;
+    [Tooltip("선택 사항. 다시 하기 때 플레이어를 돌려보낼 게임 시작 위치. UIDoor의 Spawn Point와 같은 오브젝트를 연결한다.")]
+    [SerializeField] private Transform startSpawnPoint;
+    [Tooltip("Claim Spawn Point나 Start Spawn Point를 쓸 때 플레이어를 옮길 XR Origin.")]
+    [SerializeField] private XROrigin xrOrigin;
+
     public GameState State { get; private set; } = GameState.Ready;
     public int CurrentTargetNumber { get; private set; } = 1;
+    // 게임 시작부터 클리어까지의 시간(초). 클리어 후에는 멈춘다.
+    public float PlaySeconds => clearedPlaySeconds >= 0f ? clearedPlaySeconds : (gameStartedAt >= 0f ? Time.time - gameStartedAt : 0f);
+    // 라운드 투척과 땅따먹기 투척의 전체 실패 횟수.
+    public int TotalFailures => stone != null ? stone.FailureCount : 0;
+    // 땅따먹기로 얻은 칸 번호. 클리어 전에는 0이다.
+    public int ClaimedTile => claimedTile;
     public event System.Action<GameState> StateChanged;
 
     private SabangStone subscribedStone;
     private bool starting;
+    private float gameStartedAt = -1f, clearedPlaySeconds = -1f;
+    private int claimedTile;
     private Coroutine pendingRoundCompletion;
     private readonly Dictionary<Behaviour, bool> movementStates = new Dictionary<Behaviour, bool>();
     private readonly Dictionary<XRRayInteractor, bool> rayUIStates = new Dictionary<XRRayInteractor, bool>();
@@ -56,6 +76,8 @@ public class SabangGameManager : MonoBehaviour
             Debug.LogError("SabangGameManager: Stone을 연결하고 Start Automatically를 끈 뒤 실행하세요.", this);
             return false;
         }
+        // 자기 땅 표시는 선택 사항이지만, 연결했다면 클리어 시점이 아니라 시작할 때 설정 오류를 알린다.
+        if (landMarker != null && !landMarker.ValidateConfiguration()) return false;
         return stone.CanBeginRound(1) && stone.State == SabangStone.ThrowState.Idle;
     }
 
@@ -68,9 +90,11 @@ public class SabangGameManager : MonoBehaviour
         bool started = false;
         try
         {
+            ResetGameRecord();
             LockManualMovement();
             LockUIInput();
             started = stone.TryBeginRound(CurrentTargetNumber);
+            if (started) gameStartedAt = Time.time;
             return started;
         }
         finally
@@ -87,10 +111,18 @@ public class SabangGameManager : MonoBehaviour
     private void HandleThrowState(SabangStone.ThrowState next)
     {
         if (!starting && State == GameState.Ready) return;
+        if (State == GameState.ClaimingLand)
+        {
+            // 땅따먹기 중에는 잡기·비행·실패 재시도를 같은 단계로 유지하고 성공만 클리어로 넘긴다.
+            if (next == SabangStone.ThrowState.Complete) FinishClaim();
+            else if (next == SabangStone.ThrowState.Idle) SetState(GameState.Ready);
+            return;
+        }
         switch (next)
         {
-            case SabangStone.ThrowState.Selecting: SetState(GameState.SelectingPosition); break;
-            case SabangStone.ThrowState.Charging: SetState(GameState.SelectingPower); break;
+            // Grab 투척에서는 위치 선택 단계가 망 잡기 대기, 파워 선택 단계가 망을 들고 조준하는 단계다.
+            case SabangStone.ThrowState.Ready: SetState(GameState.SelectingPosition); break;
+            case SabangStone.ThrowState.Holding: SetState(GameState.SelectingPower); break;
             case SabangStone.ThrowState.Flying:
             case SabangStone.ThrowState.Result: SetState(GameState.Throwing); break;
             case SabangStone.ThrowState.Complete: SetState(GameState.MovingForward); break;
@@ -137,13 +169,62 @@ public class SabangGameManager : MonoBehaviour
         SetState(GameState.RoundComplete);
         if (CurrentTargetNumber >= lastTargetNumber)
         {
-            Debug.Log($"SabangGameManager: {CurrentTargetNumber}번 라운드까지 완료했습니다. 다음 단계는 아직 구현되지 않았습니다.", this);
+            BeginClaim();
             return true;
         }
         CurrentTargetNumber++;
         if (!stone.TryBeginRound(CurrentTargetNumber))
             Debug.LogError($"SabangGameManager: {CurrentTargetNumber}번 목표 라운드를 시작하지 못했습니다.", this);
         return true;
+    }
+
+    // 마지막 라운드 후 자기 땅 던지기를 시작한다. 위치 이동에 실패해도 현재 위치에서 계속 진행한다.
+    private void BeginClaim()
+    {
+        SetState(GameState.ClaimingLand);
+        MovePlayerTo(claimSpawnPoint);
+        if (!stone.TryBeginClaim())
+            Debug.LogError("SabangGameManager: 땅따먹기 투척을 시작하지 못했습니다.", this);
+    }
+
+    private void FinishClaim()
+    {
+        if (State != GameState.ClaimingLand) return;
+        clearedPlaySeconds = gameStartedAt >= 0f ? Time.time - gameStartedAt : 0f;
+        claimedTile = stone.LandedTile;
+        if (landMarker != null) landMarker.Show(claimedTile);
+        SetState(GameState.Cleared);
+    }
+
+    // 클리어 화면의 다시 하기. 목표 칸, 망 위치, 자기 땅, 시간, 실패 횟수를 초기화하고 1번 라운드부터 시작한다.
+    public bool RestartGame()
+    {
+        if (State != GameState.Cleared) return false;
+        StopGame();
+        MovePlayerTo(startSpawnPoint);
+        return TryStartGame();
+    }
+
+    private void ResetGameRecord()
+    {
+        gameStartedAt = clearedPlaySeconds = -1f;
+        claimedTile = 0;
+        if (landMarker != null) landMarker.Clear();
+        stone.ResetFailureCount();
+    }
+
+    private void MovePlayerTo(Transform point)
+    {
+        if (point == null) return;
+        if (xrOrigin == null || xrOrigin.Camera == null || xrOrigin.Origin == null)
+        {
+            Debug.LogWarning($"SabangGameManager: '{point.name}'로 이동하려면 XR Origin을 연결하세요. 현재 위치에서 진행합니다.", this);
+            return;
+        }
+        // 실제로 몸을 돌리지 않도록 시점 방향을 먼저 맞춘 뒤 위치를 옮긴다.
+        xrOrigin.MatchOriginUpCameraForward(point.up, point.forward);
+        if (!xrOrigin.MoveCameraToWorldLocation(point.position + point.up * xrOrigin.CameraInOriginSpaceHeight))
+            Debug.LogWarning($"SabangGameManager: '{point.name}'로 플레이어를 옮기지 못했습니다.", this);
     }
 
     private void LockManualMovement()

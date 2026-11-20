@@ -70,6 +70,25 @@ public class Map : MonoBehaviour
         return false;
     }
 
+    // 놀이판 위의 점을 표면 높이로 내린다. 망 Collider 높이나 놓인 방향에 따라 판정이 바뀌지 않게 한다.
+    public Vector3 ProjectToSurface(Vector3 worldPoint)
+    {
+        Vector3 local = transform.InverseTransformPoint(worldPoint);
+        local.y = surfaceY;
+        return transform.TransformPoint(local);
+    }
+
+    // 구역 외곽선을 놀이판 표면 높이의 월드 좌표로 전달한다. 자기 땅 표시 등 판정 밖의 표시에 사용한다.
+    public bool TryGetRegionOutline(Region region, List<Vector3> worldPoints)
+    {
+        worldPoints.Clear();
+        int index = (int)region - 1;
+        if (index < 0 || index >= polygons.Count) return false;
+        foreach (Vector2 point in polygons[index])
+            worldPoints.Add(transform.TransformPoint(new Vector3(point.x, surfaceY, point.y)));
+        return true;
+    }
+
     private bool Contains(int polygonIndex, Vector2 point)
     {
         // 꼭짓점은 XZ 평면에서 반시계 방향이며 모든 변의 안쪽이어야 한다.
