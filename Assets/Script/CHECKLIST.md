@@ -1,5 +1,145 @@
 # 사방치기 VR 구현 체크리스트
 
+## 목표와 작업 상태
+
+- 목표: 1인용 사방치기 8칸의 선택·투척·QTE 이동·복귀·망 줍기·땅따먹기·클리어 흐름을 완성한다.
+- 개발 담당: Claude. 작업 지휘·이미지 제작·결과 검토: GPT. 씬·Inspector 연결과 HMD 체험 확인: 사용자.
+- 완료 조건: 필수 기능과 연결을 갖추고 관련 컴파일·Play Mode 검증을 마친다. VR 체험 관련 항목은 HMD 확인 결과를 별도로 남긴다.
+- 현재 단계: 20261120-006에서 Unity CLI로 씬 연결을 마치고 Play Mode 시작 검사를 통과했다. 작업 20261120-004에서 전진 이동 QTE 코드를 추가했다. 20261120-002 Grab 투척, 20261120-003 땅따먹기와 함께 컴파일은 통과했고, Inspector 연결과 Play Mode 검증이 남았다. 회전·복귀·망 줍기는 아직 없다.
+- 다음 할 일: 사용자가 Grab 투척 연결(`Stone Collider`, `Grab Interactable`, `PlayHUD` World Space)과 땅따먹기 연결(`SabangLandMarker`, 클리어 패널, 다시 하기 버튼)을 마친 뒤 `Last Target Number`를 1로 낮춰 1번 라운드 → 땅따먹기 → 클리어 → 다시 하기를 Play Mode에서 확인한다. 전진 QTE는 `SabangHopQte`와 QTE UI를 연결한 뒤 1번 목표 라운드(1번 건너뛰기)와 4번 목표 라운드(5번 오른손 외발)를 확인한다. 7번 이동 잠금·복원과 `JumpProvider` 잠금 여부도 남아 있다.
+- 미확인 사항: 기존 체크의 실행 근거, 실제 Inspector 연결과 HMD 동작은 다음 개발 작업에서 확인한다. 아직 확인하지 않은 상태를 실패나 완료로 단정하지 않는다.
+- 현재 진행 기록은 이 파일로 관리한다. `docs/사방치기_구현_체크리스트.md`는 이전 참고본이며 자동 동기화 대상으로 보지 않는다.
+
+## 관리 규칙과 인계 기록
+
+- 기존 `[x]`와 `[ ]` 및 아래 검증 기록은 로컬·원격의 이전 기록을 보존한 것이다. 원격 8번 항목의 완료와 기존 실행 기록은 원격 작성자의 보고이며, 이번 병합으로 새 실행 검증 근거가 생긴 것은 아니다.
+- 아래 구현 체크는 코드와 필요한 저장된 씬 연결을 갖춘 상태, `필수 항목 검증` 체크는 실제 Play Mode·HMD 확인 상태다. 둘을 구분한다.
+- 새 체크를 완료로 바꿀 때는 작업 번호, 변경 파일, 필요한 연결, 검증 방법과 실제 결과를 기록한다. 미실행·차단을 완료로 표시하지 않는다.
+- 여러 작업은 작업 번호별 기록을 추가한다. 지속 규칙은 루트·하위 `AGENTS.md`와 `CLAUDE.md`에서 관리한다.
+- 세션 재개 시 지침, 이 문서, 관련 우편함 기록과 실제 Git 변경 상태를 함께 확인한다.
+
+### 개발 작업별 기록 양식
+
+실제 개발을 시작할 때 아래 양식을 복사해 채운다. 예시 항목은 완료 상태를 뜻하지 않는다.
+
+- 작업 번호 / 날짜:
+- 사용자 요청과 목표:
+- 담당 / 인수자:
+- 수정 대상 / 제외 범위:
+- 완료 조건:
+- 현재 단계: 준비 / 구현 / 검증 / 완료 / 차단 중 선택한다.
+- 실제 변경과 필요한 Inspector 연결:
+- 결정과 근거:
+- 차단 원인 / 다음 실행 항목:
+- 지시서 / 결과 / 검토 기록 경로:
+
+### 검증 기록 양식
+
+| 작업 번호 | 확인 항목 | 명령 또는 방법 | 결과 | 근거 또는 미실행 이유 |
+|---|---|---|---|---|
+| 기록 시 작성한다. | 컴파일·Console / Play Mode / HMD 등을 각각 적는다. | 실제 실행한 방법을 적는다. | 통과 / 실패 / 미실행 / 해당 없음. | 로그·재현 조건·사용자 확인을 적는다. |
+
+### 이미지·개발 협업 체크 양식
+
+이미지나 개발 인계가 있는 작업에서만 복사해 사용한다. 해당하지 않는 단계는 이유를 기록하며, 완료를 뜻하는 체크를 하지 않는다.
+
+- 작업 번호 / 종류 / 발신자 / 수신자:
+- [ ] 목표·대상 경로·완료 조건을 `docs/ai-mailbox/orders/<작업번호>.order.md`에 기록했다.
+- [ ] 전달 수단과 인계 시각을 기록했다. 실제 알림이 없으면 전달 대기로 남긴다.
+- [ ] 필요한 결과 파일과 `deliveries/<작업번호>/done.json`을 확인했다.
+- [ ] 이미지 작업이면 원본을 보존하고 가공 규격·에셋 반영 경로를 기록했다.
+- [ ] Claude가 기술 검증과 미실행 항목을 결과 메모에 기록했다.
+- [ ] GPT가 목표·이미지·남은 작업을 검토해 `reviews/<작업번호>.review.md`에 기록했다.
+- [ ] 필요한 사용자 결정과 후속 작업을 기록했다.
+- [ ] 종료한 작업의 지시서·결과·검토를 `archive/<작업번호>/`에 보존하고 참조 경로를 갱신했다.
+- [ ] 외부 공개·배포 작업이면 대상 결과물과 사용자의 명시적인 승인을 기록한 뒤 실행했다.
+
+### 20261120-001 작업 기록
+
+- 작업 번호 / 날짜: 20261120-001 / 2026-11-20.
+- 사용자 요청과 목표: 우선 작업 확인, `Assets/_Recovery` 삭제, 사용자가 연결한 `SabangGameManager` 이동 잠금 확인.
+- 담당 / 인수자: Claude(확인·기록) / 사용자(Inspector 연결, Play Mode 확인).
+- 수정 대상 / 제외 범위: `Assets/_Recovery`와 `.meta` 삭제(휴지통), 이 체크리스트. 코드와 씬은 수정하지 않았다.
+- 완료 조건: 7번 연결이 저장된 씬에 있고, 7·8번이 Play Mode에서 확인된다.
+- 현재 단계: 검증. 연결 확인은 끝났고 Play Mode 확인이 남았다.
+- 실제 변경과 필요한 Inspector 연결: 사용자가 `Manual Movement Components`에 이동·스냅 회전·텔레포트 Provider 3개를 연결했다.
+- 결정과 근거: `com.coplaydev.unity-mcp` 제거는 사용자가 의도한 변경으로 확인했다. XR Rig의 `JumpProvider`(우측 A 버튼)는 활성 상태지만 잠금 목록에 없다. `ContinuousTurnProvider`는 `ControllerInputActionManager`의 Smooth Turn이 꺼져 있어 입력이 비활성이고, Grab Move 오브젝트는 비활성이다.
+- 차단 원인 / 다음 실행 항목: CLI로 Editor를 조작할 Pipeline 패키지가 없어 Play Mode를 직접 실행하지 못했다. 사용자가 Editor에서 7·8번을 확인하거나 패키지 설치를 승인한다.
+- 지시서 / 결과 / 검토 기록 경로: 사용자 직접 요청이라 우편함 기록은 만들지 않았다.
+
+### 20261120-002 작업 기록
+
+- 작업 번호 / 날짜: 20261120-002 / 2026-11-20.
+- 사용자 요청과 목표: 테스트 중 투척 UI가 보이지 않는 문제 확인, 망을 XR 기본 템플릿의 Grab으로 직접 잡아 던지는 방식으로 교체.
+- 담당 / 인수자: Claude(코드·기록) / 사용자(Inspector 연결, Canvas 설정, Play Mode·HMD 확인).
+- 수정 대상 / 제외 범위: `SabangStone.cs`, `UIManager.cs`, `SabangGameManager.cs`, `Map.cs`, 이 체크리스트. 씬·프리팹은 수정하지 않았다. 땅따먹기 투척과 망 줍기는 범위 밖이다.
+- 완료 조건: Grab으로 던진 망이 목표 칸 착지·경계선 미접촉일 때만 성공하고, 실패 시 Throw Point로 돌아와 다시 잡을 수 있다.
+- 현재 단계: 검증. 코드와 컴파일은 끝났고 Inspector 연결과 Play Mode가 남았다.
+- 실제 변경과 필요한 Inspector 연결: Ray 위치 선택·Trigger 파워 게이지 코드를 제거했다. `XRGrabInteractable`의 잡기·놓기 이벤트로 투척하고, 잡기 허용은 Interaction Layer로 제어한다. UIManager는 게이지 대신 목표 칸 안내 문구를 표시하고 Overlay Canvas면 경고한다. `Map.ProjectToSurface`를 추가했다. 연결: `SabangStone`의 `Stone Collider`(망의 Convex Mesh Collider), `Grab Interactable`(망의 XR Grab Interactable).
+- 결정과 근거: 사용자 결정 — 성공은 착지 위치만, 기존 방식은 교체, 잡기는 투척 대기 중에만, 힘은 `Throw Velocity Scale`로만 조정. XRI는 놓을 때 잡기 전 Kinematic 값을 복원하므로 놓기 이벤트에서 물리를 켜야 Detach의 속도가 적용된다. Interactable을 끄면 Detach가 생략될 수 있어 Interaction Layer를 비워 잡기를 막는다. `ThrowState` 값 이름은 바꿨지만 정수 순서와 개수는 유지했다(씬에 직렬화되지 않음).
+- 차단 원인 / 다음 실행 항목: Editor에 Pipeline 패키지가 없어 Play Mode를 직접 실행하지 못했다. `사방치기규칙_구체화.txt`는 사용자 승인으로 3장 진행 순서, 4장 돌 잡기와 던지기, 11장 필요 오브젝트·상태, 12장 조절값을 Grab 방식으로 갱신했다. 9장 자기 땅 던지기도 사용자 결정으로 Grab 직접 투척으로 바꿨다. 뒤로 던지기는 빠른 신체 회전을 요구하므로 놀이판을 바라보고 던지는 것으로 정했다. 땅따먹기 코드는 아직 구현하지 않았다.
+- 지시서 / 결과 / 검토 기록 경로: 사용자 직접 요청이라 우편함 기록은 만들지 않았다.
+
+### 20261120-003 작업 기록
+
+- 작업 번호 / 날짜: 20261120-003 / 2026-11-20.
+- 사용자 요청과 목표: 땅따먹기 코드 구현. 규칙 문서 9장(Grab 직접 투척, 놀이판을 바라보고 던지기)을 따른다.
+- 담당 / 인수자: Claude(코드·기록) / 사용자(오브젝트·UI 구성, Inspector 연결, Play Mode·HMD 확인).
+- 수정 대상 / 제외 범위: `SabangStone.cs`, `SabangGameManager.cs`, `UIManager.cs`, `Map.cs`, 새 `SabangLandMarker.cs`, 이 체크리스트. 씬은 수정하지 않았다. 전진·회전·복귀·망 줍기는 범위 밖이며 `Complete Round On Throw Success` 임시 진행을 그대로 쓴다.
+- 완료 조건: 마지막 라운드 성공 후 땅따먹기로 넘어가고, 1~8번 칸 착지 시 자기 땅 표시와 클리어 화면(시간·실패 횟수·칸 번호)이 나오며, 다시 하기로 1번 라운드부터 초기화되어 시작한다.
+- 현재 단계: 검증. 코드와 컴파일은 끝났고 연결과 Play Mode가 남았다.
+- 실제 변경과 필요한 Inspector 연결: `SabangStone`에 땅따먹기 투척 모드(`TryBeginClaim`, `IsClaiming`, `LandedTile`, `ResetFailureCount`, 선택 `Claim Throw Point`)를 추가했다. `SabangGameManager`는 마지막 라운드 후 `ClaimingLand`, 성공 시 `Cleared`로 전환하고 플레이 시간·실패 횟수를 기록하며 `RestartGame`을 제공한다. `Map.TryGetRegionOutline`을 추가했다. `UIManager`는 땅따먹기 안내, 클리어 패널, `RetryButton`을 제공한다. 연결 방법은 아래 Inspector 연결 절을 따른다.
+- 결정과 근거: 칸 표시는 사용자가 배치한 Mesh Filter·Mesh Renderer 오브젝트에 런타임 메쉬를 넣는 방식으로 했다(씬 오브젝트 자동 생성 금지 원칙). 위치 이동은 `UIDoor`와 같은 `XROrigin.MoveCameraToWorldLocation`을 쓰고 방향은 `MatchOriginUpCameraForward`로 맞춰 실제 몸 회전을 요구하지 않는다. `UIManager`가 `SabangGameManager.StateChanged`를 구독해 순환 참조를 만들지 않았다. 자기 땅 표시와 이동 위치는 선택 사항이라 비워도 클리어는 진행된다.
+- 차단 원인 / 다음 실행 항목: Unity MCP 브리지·Pipeline 패키지가 없어 Play Mode를 직접 실행하지 못했다. 클리어 화면에서 다시 하기를 누르지 않으면 `Cleared`에 머물러 `UIDoor` 시작 안내가 다시 나오지 않는다. 나가기 동작이 필요하면 별도로 정한다.
+- Inspector 연결: ① 자기 땅 표시용 빈 오브젝트에 Mesh Filter·Mesh Renderer(색상 또는 문양 Material)를 추가하고 Collider는 두지 않는다. ② 별도 오브젝트에 `SabangLandMarker`를 추가해 `Map`, `Land Fill`(①의 Mesh Filter)을 연결한다. ③ `SabangGameManager`에 `Land Marker`, 필요하면 `Claim Spawn Point`·`Start Spawn Point`·`XR Origin`을 연결한다. ④ World Space Canvas에 클리어 패널(TMP 텍스트, 다시 하기 버튼)을 만들고 `UIManager`의 `Clear Panel`, `Clear Text`에 연결하며 버튼 OnClick에 `UIManager.RetryButton`을 연결한다. ⑤ 땅따먹기 위치가 시작 위치와 다르면 `SabangStone`의 `Claim Throw Point`를 연결한다.
+- 지시서 / 결과 / 검토 기록 경로: 사용자 직접 요청이라 우편함 기록은 만들지 않았다.
+
+### 20261120-004 작업 기록
+
+- 작업 번호 / 날짜: 20261120-004 / 2026-11-20.
+- 사용자 요청과 목표: 전진 이동 QTE 구현. 규칙 문서 2·5·8장의 칸 속성, 판정, 이동 예외를 따른다.
+- 담당 / 인수자: Claude(코드·기록) / 사용자(QTE UI 구성, LandingPoint 배치, Inspector 연결, Play Mode·HMD 확인).
+- 수정 대상 / 제외 범위: 새 `SabangHopQte.cs`, `SabangGameManager.cs`, `UIManager.cs`, 이 체크리스트. 씬은 수정하지 않았다. 180도 회전, 복귀, 망 줍기는 범위 밖이다.
+- 완료 조건: 투척 성공 후 목표 칸을 제외한 1번~7·8번 구역을 QTE로 전진하고, 외발·양발·한쪽 칸 외발 입력이 규칙대로 판정되며, 실패 시 현재 칸 QTE만 다시 시작한다.
+- 현재 단계: 검증. 코드와 컴파일은 끝났고 연결과 Play Mode가 남았다.
+- 실제 변경과 필요한 Inspector 연결: `SabangHopQte`가 칸 속성(작성 당시 1·2·3·6 외발, 4·5와 7·8 양발 — 20261120-005에서 3·6 외발, 1·2·4·5·7·8 양발로 변경, 왼쪽 칸=왼손)과 전진 경로를 정의하고, 기준점 ±`Success Window`(0.25초)·양손 `Simultaneous Window`(0.2초)로 Trigger 입력을 판정한다. 성공하면 `Hop Duration` 동안 XR Origin을 착지 지점으로 옮긴다. `Landing Points`(1~8번 순서)를 비운 칸은 Map 칸 모양의 중심을 쓰고, 양발 착지는 두 칸 지점의 가운데다. `UIManager`에 QTE 표시(`QTE Root`, 줄어드는 `QTE Approach Ring`, 손 안내 문구)를 추가했다. `SabangGameManager`는 투척 성공 후 `Next Round Delay` 뒤 전진 QTE를 시작하고, QTE 실패 횟수를 전체 실패 횟수에 더한다.
+- 결정과 근거: 회전·복귀·망 줍기가 없어서, `Complete Round On Throw Success`를 `Temporary Round Completion`으로 이름을 바꿔(`FormerlySerializedAs`로 기존 값 유지) 전진 QTE 완료 후 `Start Spawn Point`로 돌아가 라운드를 완료하는 임시 연결로 썼다. 끄면 전진 완료 후 `Turning` 상태에서 멈춘다. 성공 구간 밖의 이른 입력, 지정 손이 아닌 손, 외발 칸의 양손 입력은 실패다. 양발 칸은 두 번째 손도 성공 구간 안에서 0.2초 이내여야 한다. 외발 성공은 다른 손 입력이 없는지 0.2초 확인한 뒤 확정한다. 이동은 기존 `UIDoor`와 같이 XR Origin 위치를 직접 옮겨 이동 잠금의 영향을 받지 않는다. 시점 회전은 하지 않는다.
+- 차단 원인 / 다음 실행 항목: Unity MCP 브리지·Pipeline 패키지가 없어 Play Mode를 직접 실행하지 못했다. 실제 Trigger 입력과 이동 멀미 여부는 HMD 확인이 필요하다.
+- Inspector 연결: ① 놀이판 밖 빈 오브젝트에 `SabangHopQte`를 추가하고 `Map`, `XR Origin`, `UI Manager`를 연결한다. ② `Left Trigger`에 `XRI Default Input Actions`의 `XRI Left Interaction/Activate`, `Right Trigger`에 `XRI Right Interaction/Activate`를 연결한다. ③ 필요하면 1~8번 칸 위에 빈 오브젝트를 두고 `Landing Points` 0~7번에 순서대로 연결한다(XR Origin 자식 금지). ④ World Space Canvas에 `QTE Root`(기본 비활성)와 그 자식으로 고정 기준 원 이미지·같은 크기의 `QTE Approach Ring` 이미지를 만들고 `UIManager`에 연결한다. ⑤ `SabangGameManager`의 `Hop Qte`에 ①을 연결하고 `Start Spawn Point`·`XR Origin`이 연결되어 있는지 확인한다.
+- 지시서 / 결과 / 검토 기록 경로: 사용자 직접 요청이라 우편함 기록은 만들지 않았다.
+
+### 20261120-005 작업 기록
+
+- 작업 번호 / 날짜: 20261120-005 / 2026-11-20.
+- 사용자 요청과 목표: Unity CLI 연결 확인과 준비, 저장된 씬의 잘못된 연결 점검.
+- 담당 / 인수자: Claude(CLI 준비·점검) / 사용자(Editor 창 전환, Inspector 수정).
+- 수정 대상 / 제외 범위: `Packages/manifest.json`에 `com.unity.pipeline` 1.0.0 추가(`unity pipeline install`). 이후 사용자 결정으로 `SabangHopQte.cs`와 `사방치기규칙_구체화.txt`의 칸 구성을 수정했다. 씬은 수정하지 않았다.
+- 현재 단계: CLI 연결 완료. 사용자가 Editor 창으로 전환한 뒤 `unity status`가 `ready`(포트 7800)가 되었다. Editor Console 오류·경고 0개, 컴파일 실패 없음. `script eval`(읽기 전용)로 열린 `SaBang` 씬(변경 없음 상태)을 확인한 결과가 아래 파일 점검과 같다.
+- 씬 점검(저장된 `SaBang.unity` 파일 기준): ① `SabangStone`의 `Stone Collider`·`Grab Interactable`이 비어 있어 게임이 시작되지 않는다. 같은 오브젝트에 Convex Mesh Collider와 XR Grab Interactable은 있다. ② `SabangLandMarker`(오브젝트 `1 (1)`)의 `Map`·`Land Fill`이 비어 있는데 `Land Marker`가 연결되어 있어 시작 검사에서 막힌다. ③ `SabangGameManager`의 `Hop Qte`가 비어 있고, `SabangHopQte`의 `Left Trigger`·`Right Trigger`도 비어 있다. ④ `SpawnPoint`와 `Claim Spawn Point`(`1`)의 파란 축이 놀이판 반대(월드 -X)를 향한다. `Claim Spawn Point`는 1번 칸 위, 표면보다 약 0.59m 아래에 있다. ⑤ `PlayHUD`가 아직 Screen Space - Overlay다. ⑥ `QTERoot` Canvas가 로비 `UI` Canvas와 같은 위치·방향(월드 z 664.5, 앞쪽 -Z)에 있어 놀이판(+X 방향)을 보며 전진하는 동안 시야 밖이며, 고정 기준 원 이미지가 없다(빈 `GameObject`만 있음). ⑦ `sabangBorder` Layer에 Collider가 없어 경계선 접촉을 판정할 수 없다(2026-10-21 기록과 같음, 20261120-007에서 해결). ⑧ `UIManager`의 `Clear Panel`·`Clear Text`가 비어 있다. 정상: Landing Point 8개는 각 번호 칸 안에 있고, 이동 잠금에 `JumpProvider`가 추가되었다.
+- 결정: 놀이판 이미지(Map)에서는 1·2번이 나란한 칸이고 3·6번만 외발 칸인데, 규칙 문서와 전진 QTE 코드는 1·2·3·6번을 외발로 보았다. 사용자가 놀이판 기준으로 정해 `SabangHopQte` 전진 구역을 [1·2] → 3 → [4·5] → 6 → [7·8]로 바꾸고 `사방치기규칙_구체화.txt` 2·3·8장을 고쳤다. 목표 1번은 2번 오른손 외발, 목표 2번은 1번 왼손 외발로 착지한다. 컴파일(래퍼 csproj `dotnet build`) 오류 0개, `git diff --check -- Assets/Script` 통과.
+- 지시서 / 결과 / 검토 기록 경로: 사용자 직접 요청이라 우편함 기록은 만들지 않았다.
+
+### 20261120-006 작업 기록
+
+- 작업 번호 / 날짜: 20261120-006 / 2026-11-20.
+- 사용자 요청과 목표: 20261120-005에서 찾은 씬 연결 문제를 Unity CLI로 수정.
+- 담당 / 인수자: Claude(CLI로 씬 수정·검증) / 사용자(HMD에서 배치·가독성 확인).
+- 수정 대상 / 제외 범위: `Assets/Scenes/SaBang.unity`, 새 `Assets/Materials/SabangLandFill.mat`. 코드는 수정하지 않았다. 경계선 Collider 제작은 범위 밖이다. 수정 전 씬은 세션 임시 폴더에 백업했다.
+- 실제 변경: ① `SabangStone`에 같은 오브젝트의 Mesh Collider·XR Grab Interactable 연결. ② `SabangLandMarker`에 `Map`, `Land Fill`(오브젝트 `1`의 Mesh Filter) 연결, `1`의 Mesh Renderer에 반투명 금색 URP Unlit Material 지정. `1`은 땅 표시용 오브젝트였으므로 `Claim Spawn Point`에서 빼고 `SpawnPoint`를 연결했다. ③ `SabangGameManager.Hop Qte`와 `SabangHopQte`의 `XRI Left/Right Interaction/Activate` 연결. ④ `SpawnPoint`가 놀이판(+X)을 바라보게 회전. ⑤ `PlayHUD`를 World Space(놀이판 끝 너머, 높이 12.4, Scale 0.0025, 플레이어 쪽을 향함)로 바꾸고 `TrackedDeviceGraphicRaycaster` 추가, 쓰지 않는 `GaugeRoot` 비활성, `ResultText` 가운데 정렬. ⑥ `PlayHUD/ClearPanel`(비활성, `ClearText`, `RetryButton` → `UIManager.RetryButton`)을 만들어 연결. ⑦ `QTERoot`를 `PlayHUD` 아래(높이 11.95, Scale 0.006)로 옮기고 비활성화, 빈 자식을 `TargetRing`(흰 원), `Image`를 `ApproachRing`(노란 원)으로 바꾸고 `Circle_60x60 Outline 4` 스프라이트를 지정.
+- 검증: 아래 검증 기록. 실제 HMD에서 글자 크기·위치는 확인하지 못했다.
+- 남은 문제: `sabangBorder` Layer에 Collider가 없어 경계선 접촉 실패가 판정되지 않는다(20261120-007에서 해결). `Sphere`(놀이판 옆 표시용 구)는 용도를 확인하지 못해 그대로 두었다. `sabangHoqQte` 오브젝트 이름은 바꾸지 않았다.
+- 지시서 / 결과 / 검토 기록 경로: 사용자 직접 요청이라 우편함 기록은 만들지 않았다.
+
+### 20261120-007 작업 기록
+
+- 작업 번호 / 날짜: 20261120-007 / 2026-11-20.
+- 사용자 요청과 목표: 경계선(`sabangBorder`) 판정용 Collider 만들기.
+- 담당 / 인수자: Claude(코드·CLI 연결·Play Mode 확인) / 사용자(HMD에서 실제 투척 감각 확인).
+- 수정 대상 / 제외 범위: `Map.cs`, `SaBang.unity`의 `Map.Border Layer` 값. `SabangStone`의 판정 코드는 바꾸지 않았다.
+- 실제 변경: `Map`이 Awake에서 1~8번 칸과 하늘 구역의 외곽선을 선분으로 나눠, `Border Layer`에 얇은 Convex Mesh Collider Trigger(로컬 두께 `Border Thickness` 0.014, 표면 중심 높이 `Border Height` 0.02)를 만든다. 이웃 칸이 공유하는 같은 선분은 한 번만 만들어 55개가 생긴다. Map의 비균일 Scale에서 모양이 틀어지지 않도록 칸 Collider와 같은 로컬 좌표 메쉬 방식을 썼다. `Border Layer`를 비우면 만들지 않아 이전 동작과 같다. 씬에서 `Border Layer`를 `sabangBorder`로 설정해 저장했다.
+- 결정과 근거: 씬에 선분 오브젝트를 직접 배치하면 이미지 비율(`Image Size`)이 바뀔 때 어긋나므로 칸 판정과 같은 다각형에서 만든다. 높이를 낮게 두어 날아가는 망은 닿지 않고 바닥에 닿은 망만 판정한다. 규칙 4장대로 망 일부가 선에 닿으면 중심이 칸 안이어도 실패다.
+- 지시서 / 결과 / 검토 기록 경로: 사용자 직접 요청이라 우편함 기록은 만들지 않았다.
+
 ## 관리 규칙
 
 - 세부 구현은 `Assets/Script/사방치기규칙_구체화.txt`를 우선 기준으로 한다. 전체 체험 방향과 확장 후보는 `Assets/한국 전통놀이 VR 체험 기획서.pdf`를 참고한다.
@@ -7,32 +147,20 @@
 - 실제 실행 검증은 `필수 항목 검증`에서 Unity Play Mode 확인 후 별도로 체크하고 `검증 기록`에 남긴다.
 - 실패·차단·미실행을 완료로 표시하지 않는다. 불필요한 항목은 체크하지 않은 채 `해당 없음 — 이유`로 표시한다.
 - 주요 단계가 끝나거나 작업 상태가 달라지면 `현재 상태`를 갱신한다.
-- 지속적으로 적용할 규칙은 루트 `CLAUDE.md`나 `unity-csharp-script` 스킬에 기록한다.
-
-## 목표와 범위
-
-- 목표: 1인용 사방치기 8칸 기본 플레이를 VR로 구현한다.
-- 작업 대상: `Map.cs`, `SabangStone.cs`, `SabangGameManager.cs`, `UIDoor.cs`와 관련 씬 연결.
-- 완료 조건: `필수 구현 항목`과 `필수 항목 검증`을 모두 통과한다.
-
-## 현재 상태
-
-- 진행 단계: 구현 — 프로토타입 1~6번, 8번 완료.
-- 다음 할 일: 프로토타입 7번 일반 이동 잠금.
-- 차단 원인: 없음.
+- 지속적으로 적용할 규칙은 루트 `AGENTS.md`, `CLAUDE.md`와 상세 C# 지침·스킬에 기록한다.
 
 ## 프로토타입 우선 구현 순서
 
 아래 항목을 위에서부터 순서대로 구현하고 Play Mode에서 확인한다. 이 흐름이 완료되면 이후 필수 기능을 확장한다.
 
 - [x] **1. 게임 시작 최소 흐름** — `UIDoor`에서 시작을 선택하고 `SpawnPoint`로 이동한 뒤 `SabangGameManager.TryStartGame()`을 호출한다.
-- [x] **2. 망과 투척 참조 연결** — `SabangStone`의 Rigidbody, Collider, Throw Point, Ray Origin, 오른손 Trigger, `Map`을 Inspector에서 연결한다.
-- [x] **3. 첫 목표 칸 선택** — 1번 칸만 대상으로 Ray가 칸 내부를 가리킬 때 위치를 선택한다. 칸 밖과 경계선 근처 입력은 무시한다.
-- [x] **4. 파워 게이지와 투척** — 0~100 왕복 게이지를 표시하고 Trigger 재입력 시 파워를 확정해 망을 물리적으로 발사한다.
-- [x] **5. 투척 결과와 재시도** — 적정 파워·목표 칸 착지·경계선 미접촉을 성공으로 처리하고, 나머지는 투척 모션 후 “실패” UI를 표시한 뒤 위치 선택으로 돌아간다.
-- [x] **6. 상태 알림 확인** — `Ready → SelectingPosition → SelectingPower → Throwing` 상태가 중복 없이 전환되고, 성공 시 `MovingForward` 이벤트가 한 번 호출되는지 확인한다.
-- [ ] **7. 일반 이동 잠금** — 게임 시작 시 Inspector에 연결한 일반 이동·회전·자유 텔레포트 컴포넌트만 비활성화하고, 중단 시 원래 활성 상태로 복원한다.
-- [x] **8. 최소 라운드 종료 신호** — 외부 테스트 메서드나 임시 이벤트로 라운드 완료를 전달하고 다음 목표 칸으로 넘어갈 연결 지점을 확인한다. 코드 완료: `SabangGameManager.CompleteRound()`와 임시 옵션 `Complete Round On Throw Success`.
+- [x] **2. 망과 투척 참조 연결** — `SabangStone`의 Rigidbody, Collider, XR Grab Interactable, Throw Point, `Map`을 Inspector에서 연결한다. 20261120-002에서 Ray Origin·오른손 Trigger 대신 Grab Interactable 연결로 바뀌었다. 20261120-006에서 `Stone Collider`(Convex Mesh Collider)와 `Grab Interactable`을 연결해 저장했다.
+- [ ] **3. 첫 목표 칸 선택** — 해당 없음 — Grab 투척으로 교체(20261120-002). 목표 칸 번호는 결과 문구 자리에 안내한다.
+- [x] **4. Grab 투척** — Throw Point의 망을 Grip으로 잡아 손으로 던지고, 놓는 순간의 손 속도로 날아간다. 잡기는 투척 대기 중에만 허용한다. 코드 완료(20261120-002), 씬 연결 완료(20261120-006), 실제 잡기·투척은 Play Mode·HMD 확인 대기. 기존 파워 게이지 방식은 해당 없음 — Grab 투척으로 교체(20261120-002).
+- [x] **5. 투척 결과와 재시도** — 목표 칸 착지·경계선 미접촉을 성공으로 처리하고, 나머지는 착지 후 “실패” UI를 표시한 뒤 망을 Throw Point로 돌려 잡기 대기로 돌아간다. 20261120-002에서 적정 파워 조건을 뺐다.
+- [x] **6. 상태 알림 확인** — `Ready → SelectingPosition → SelectingPower → Throwing` 상태가 중복 없이 전환되고, 성공 시 `MovingForward` 이벤트가 한 번 호출되는지 확인한다. 20261120-002 이후 `SelectingPosition`은 망 잡기 대기, `SelectingPower`는 망을 든 상태를 뜻한다. 새 방식의 전환은 다시 확인해야 한다.
+- [x] **7. 일반 이동 잠금** — 게임 시작 시 Inspector에 연결한 일반 이동·회전·자유 텔레포트 컴포넌트만 비활성화하고, 중단 시 원래 활성 상태로 복원한다. 연결 완료(20261120-001): `SaBang.unity`의 `Manual Movement Components`에 XR Origin (XR Rig)의 `DynamicMoveProvider`, `SnapTurnProvider`, `TeleportationProvider`. Play Mode 검증은 미실행이다.
+- [x] **8. 최소 라운드 종료 신호** — 외부 테스트 메서드나 임시 이벤트로 라운드 완료를 전달하고 다음 목표 칸으로 넘어갈 연결 지점을 확인한다. 코드 완료: `SabangGameManager.CompleteRound()`와 임시 옵션 `Complete Round On Throw Success`(20261120-004에서 `Temporary Round Completion`으로 이름 변경, 값 유지).
 
 프로토타입 1차 완료 기준은 1번 칸에 망을 선택·투척하고, 성공·실패 결과가 표시되며, 실패 후 같은 시도를 재개하고, 성공 결과가 이동 단계로 전달되는 것이다. 실제 전진 QTE, 복귀, 망 줍기, 땅따먹기는 이 기준을 통과한 뒤 구현한다.
 
@@ -44,31 +172,35 @@
 - [ ] 준비, 위치 선택, 파워 선택, 투척, 전진, 회전, 복귀, 망 줍기, 라운드 완료, 땅따먹기, 클리어 상태를 관리한다.
 - [ ] 플레이 중 일반 이동 입력을 잠근다.
 - [ ] 목표 칸을 1번부터 8번까지 순서대로 관리한다.
-- [ ] 전체 실패 횟수와 플레이 시간을 기록한다.
+- [x] 전체 실패 횟수와 플레이 시간을 기록한다. 코드 완료(20261120-003). 씬 연결 완료(20261120-006), Play Mode 동작 확인 대기.
 
 ### 2. 놀이판과 구역 판정
 
 - [x] 1번부터 8번까지의 Tile Collider를 판정한다.
 - [x] 하늘 구역을 구분한다.
-- [x] Border Collider와 망의 경계선 접촉을 판정한다.
-- [ ] 각 칸에 LandingPoint를 배치하고 이동에 사용한다.
+- [x] Border Collider와 망의 경계선 접촉을 판정한다. 20261120-007: 경계선 Trigger를 `Map`이 만들고 씬에 `Border Layer` 연결.
+- [x] 각 칸에 LandingPoint를 배치하고 이동에 사용한다. 코드 완료(20261120-004): `Landing Points`를 비우면 칸 중심을 쓴다. 씬 연결 완료(20261120-006), Play Mode 동작 확인 대기.
 - [ ] 게임 시작 SpawnPoint와 땅따먹기 투척 위치를 배치한다.
-- [ ] 1·2·3·6번 외발 칸과 4·5번, 7·8번 양발 칸의 속성을 정의한다.
-- [ ] 나란한 칸에서 왼쪽은 왼손, 오른쪽은 오른손에 대응한다.
+- [x] 3·6번 외발 칸과 1·2번, 4·5번, 7·8번 양발 칸의 속성을 정의한다(20261120-005에서 놀이판 기준으로 변경). 코드 완료(`SabangHopQte` 전진 구역). 씬 연결 완료(20261120-006), Play Mode 동작 확인 대기.
+- [x] 나란한 칸에서 왼쪽은 왼손, 오른쪽은 오른손에 대응한다. 코드 완료(20261120-004). 씬 연결 완료(20261120-006), Play Mode 동작 확인 대기.
 
-### 3. 망 위치 선택과 투척
+### 3. 망 투척 (Grab)
 
-- [x] 오른손 컨트롤러 Ray로 현재 목표 칸 내부 위치를 가리킨다.
-- [x] 목표 칸 밖 또는 경계선 근처에서는 위치를 확정할 수 없게 한다.
-- [x] 첫 Trigger 입력으로 망의 목표 위치를 확정한다.
-- [x] 0부터 100까지 왕복하는 파워 게이지를 표시한다.
-- [x] Trigger를 놓았다가 다시 누르면 현재 파워를 확정한다.
-- [x] 1번부터 8번까지의 필요 파워와 기본 허용 범위 ±10을 설정한다.
-- [x] 파워 부족, 적정, 초과에 맞는 실제 투척 비행을 보인다.
+- [x] 투척 대기 중 망을 Throw Point에 두고 목표 칸 번호를 안내한다. 코드 완료(20261120-002), 씬 연결 완료(20261120-006), Play Mode 동작 확인 대기.
+- [x] XR Grab Interactable로 망을 잡고, 놓을 때의 손 속도로 던진다. 던지는 힘은 `Throw Velocity Scale`로 조절한다. 코드 완료(20261120-002), 씬 연결 완료(20261120-006), Play Mode 동작 확인 대기.
+- [x] 투척 대기·들고 있는 동안에만 잡기를 허용하고, 비행·결과 중에는 잡을 수 없게 한다. 코드 완료(20261120-002), 씬 연결 완료(20261120-006), Play Mode 동작 확인 대기.
+- [x] 잡은 상태에서 추적 끊김 등으로 취소되면 실패로 세지 않고 다시 잡게 한다. 코드 완료(20261120-002), 씬 연결 완료(20261120-006), Play Mode 동작 확인 대기.
+- [ ] 오른손 컨트롤러 Ray로 현재 목표 칸 내부 위치를 가리킨다. 해당 없음 — Grab 투척으로 교체(20261120-002).
+- [ ] 목표 칸 밖 또는 경계선 근처에서는 위치를 확정할 수 없게 한다. 해당 없음 — Grab 투척으로 교체(20261120-002).
+- [ ] 첫 Trigger 입력으로 망의 목표 위치를 확정한다. 해당 없음 — Grab 투척으로 교체(20261120-002).
+- [ ] 0부터 100까지 왕복하는 파워 게이지를 표시한다. 해당 없음 — Grab 투척으로 교체(20261120-002).
+- [ ] Trigger를 놓았다가 다시 누르면 현재 파워를 확정한다. 해당 없음 — Grab 투척으로 교체(20261120-002).
+- [ ] 1번부터 8번까지의 필요 파워와 기본 허용 범위 ±10을 설정한다. 해당 없음 — Grab 투척으로 교체(20261120-002).
+- [ ] 파워 부족, 적정, 초과에 맞는 실제 투척 비행을 보인다. 해당 없음 — Grab 투척으로 교체(20261120-002).
 - [x] 망 중심이 목표 칸 안에 있는지 판정한다.
 - [x] 망이 경계선에 접촉했는지 판정한다.
-- [x] 적정 파워, 목표 칸 착지, 경계선 미접촉을 모두 만족할 때만 성공 처리한다.
-- [x] 파워가 허용 범위를 벗어나면 목표 칸에 떨어져도 실패 처리한다.
+- [x] 목표 칸 착지, 경계선 미접촉을 모두 만족할 때만 성공 처리한다. 20261120-002에서 적정 파워 조건을 뺐다.
+- [ ] 파워가 허용 범위를 벗어나면 목표 칸에 떨어져도 실패 처리한다. 해당 없음 — Grab 투척으로 교체(20261120-002).
 - [x] 실패 시 투척 모션을 끝까지 보인 뒤 실패 UI를 표시한다.
 - [x] 실패 후 같은 목표 칸의 위치 선택 단계부터 다시 시작한다.
 - [x] 실패 횟수는 투척 시도당 한 번만 증가한다.
@@ -76,17 +208,19 @@
 
 ### 4. 전진 이동 QTE
 
-- [ ] QTE 기준점의 ±0.25초를 성공 구간으로 판정한다.
-- [ ] 외발 칸에서 왼손 또는 오른손 Trigger 하나를 성공 입력으로 처리한다.
-- [ ] 외발 칸에서 양손 동시 입력은 실패 처리한다.
-- [ ] 양발 칸에서 양쪽 Trigger가 0.2초 이내에 눌리면 성공 처리한다.
-- [ ] QTE 성공 시 다음 LandingPoint로 이동한다.
-- [ ] QTE 실패 시 현재 칸의 QTE만 재시작한다.
-- [ ] 목표가 1·2·3·6번이면 해당 칸 전체를 건너뛴다.
-- [ ] 목표가 4번이면 5번 칸에 오른손 외발 입력으로 착지한다.
-- [ ] 목표가 5번이면 4번 칸에 왼손 외발 입력으로 착지한다.
-- [ ] 목표가 7번이면 8번 칸에 오른손 외발 입력으로 착지한다.
-- [ ] 목표가 8번이면 7번 칸에 왼손 외발 입력으로 착지한다.
+- [x] QTE 기준점의 ±0.25초를 성공 구간으로 판정한다. 코드 완료(20261120-004). 씬 연결 완료(20261120-006), Play Mode 동작 확인 대기.
+- [x] 외발 칸에서 왼손 또는 오른손 Trigger 하나를 성공 입력으로 처리한다. 코드 완료(20261120-004). 씬 연결 완료(20261120-006), Play Mode 동작 확인 대기.
+- [x] 외발 칸에서 양손 동시 입력은 실패 처리한다. 코드 완료(20261120-004). 씬 연결 완료(20261120-006), Play Mode 동작 확인 대기.
+- [x] 양발 칸에서 양쪽 Trigger가 0.2초 이내에 눌리면 성공 처리한다. 코드 완료(20261120-004). 씬 연결 완료(20261120-006), Play Mode 동작 확인 대기.
+- [x] QTE 성공 시 다음 LandingPoint로 이동한다. 코드 완료(20261120-004). 씬 연결 완료(20261120-006), Play Mode 동작 확인 대기.
+- [x] QTE 실패 시 현재 칸의 QTE만 재시작한다. 코드 완료(20261120-004). 씬 연결 완료(20261120-006), Play Mode 동작 확인 대기.
+- [x] 목표가 3·6번이면 해당 칸 전체를 건너뛴다. 코드 완료(20261120-004, 20261120-005에서 놀이판 기준으로 변경). 씬 연결 완료(20261120-006), Play Mode 동작 확인 대기.
+- [x] 목표가 1번이면 2번 칸에 오른손 외발 입력으로 착지한다. 코드 완료(20261120-005). 씬 연결 완료(20261120-006), Play Mode 동작 확인 대기.
+- [x] 목표가 2번이면 1번 칸에 왼손 외발 입력으로 착지한다. 코드 완료(20261120-005). 씬 연결 완료(20261120-006), Play Mode 동작 확인 대기.
+- [x] 목표가 4번이면 5번 칸에 오른손 외발 입력으로 착지한다. 코드 완료(20261120-004). 씬 연결 완료(20261120-006), Play Mode 동작 확인 대기.
+- [x] 목표가 5번이면 4번 칸에 왼손 외발 입력으로 착지한다. 코드 완료(20261120-004). 씬 연결 완료(20261120-006), Play Mode 동작 확인 대기.
+- [x] 목표가 7번이면 8번 칸에 오른손 외발 입력으로 착지한다. 코드 완료(20261120-004). 씬 연결 완료(20261120-006), Play Mode 동작 확인 대기.
+- [x] 목표가 8번이면 7번 칸에 왼손 외발 입력으로 착지한다. 코드 완료(20261120-004). 씬 연결 완료(20261120-006), Play Mode 동작 확인 대기.
 
 ### 5. 회전, 복귀와 망 줍기
 
@@ -102,22 +236,23 @@
 ### 6. 라운드 완료와 땅따먹기
 
 - [ ] 라운드 성공 시 목표 칸을 1 증가시키고 다음 라운드를 시작한다.
-- [ ] 8번 목표 라운드까지 성공하면 땅따먹기 단계로 전환한다.
-- [ ] 땅따먹기 시작 시 플레이어를 1번 칸 앞의 지정 위치로 이동시킨다.
-- [ ] Trigger 파워 게이지로 땅따먹기 망 투척을 처리한다.
-- [ ] 1번부터 8번 중 경계선에 닿지 않은 착지 칸을 자기 땅으로 확정한다.
-- [ ] 땅따먹기 실패 시 즉시 다시 시도한다.
-- [ ] 자기 땅 칸의 색상 또는 문양을 변경한다.
-- [ ] 첫 번째 자기 땅을 획득하면 게임 클리어 처리한다.
-- [ ] 클리어 UI에 완료 시간과 전체 실패 횟수를 표시한다.
-- [ ] 다시 하기에서 목표 칸, 망 위치, 자기 땅, 시간, 실패 횟수를 초기화한다.
+- [x] 8번 목표 라운드까지 성공하면 땅따먹기 단계로 전환한다. `Last Target Number`로 전환 라운드를 줄여 테스트할 수 있다. 코드 완료(20261120-003). 씬 연결 완료(20261120-006), Play Mode 동작 확인 대기.
+- [x] 땅따먹기 시작 시 플레이어를 1번 칸 앞의 지정 위치로 이동시키고 놀이판을 바라보게 한다. `Claim Spawn Point`를 비우면 현재 위치에서 진행한다. 코드 완료(20261120-003). 씬 연결 완료(20261120-006), Play Mode 동작 확인 대기.
+- [x] 투척 단계와 같은 Grab 직접 투척으로 땅따먹기 망 투척을 처리한다. 목표 칸 없이 1~8번 중 착지한 칸을 판정한다(20261120-002 규칙 변경). 코드 완료(20261120-003). 씬 연결 완료(20261120-006), Play Mode 동작 확인 대기.
+- [x] 1번부터 8번 중 경계선에 닿지 않은 착지 칸을 자기 땅으로 확정한다. 하늘 구역과 놀이판 밖은 실패다. 코드 완료(20261120-003). 씬 연결 완료(20261120-006), Play Mode 동작 확인 대기.
+- [x] 땅따먹기 실패 시 즉시 다시 시도한다. 코드 완료(20261120-003). 씬 연결 완료(20261120-006), Play Mode 동작 확인 대기.
+- [x] 자기 땅 칸의 색상 또는 문양을 변경한다. `SabangLandMarker`가 칸 모양 메쉬를 만들어 지정 Material로 채운다. 코드 완료(20261120-003). 씬 연결 완료(20261120-006), Play Mode 동작 확인 대기.
+- [x] 첫 번째 자기 땅을 획득하면 게임 클리어 처리한다. 코드 완료(20261120-003). 씬 연결 완료(20261120-006), Play Mode 동작 확인 대기.
+- [x] 클리어 UI에 완료 시간과 전체 실패 횟수를 표시한다. 얻은 칸 번호도 함께 표시한다. 코드 완료(20261120-003). 씬 연결 완료(20261120-006), Play Mode 동작 확인 대기.
+- [x] 다시 하기에서 목표 칸, 망 위치, 자기 땅, 시간, 실패 횟수를 초기화한다. `Start Spawn Point`를 연결하면 시작 위치로 되돌린다. 코드 완료(20261120-003). 씬 연결 완료(20261120-006), Play Mode 동작 확인 대기.
 
 ## 필수 항목 검증
 
-- [ ] Inspector에 Map, Rigidbody, Collider, Throw Point, Ray Origin, 입력 Action, UI, Layer Mask 참조를 연결한다.
+- [x] Inspector에 Map, Rigidbody, Collider, XR Grab Interactable, Throw Point, UI, Layer Mask 참조를 연결한다. 20261120-006: Play Mode에서 `CanStartGame`·각 `ValidateConfiguration` 통과. `sabangBorder` 경계선 Trigger는 20261120-007에서 `Map`이 만들도록 했다.
 - [ ] 1번부터 8번까지 목표 칸별 투척 성공을 확인한다.
-- [ ] 파워 부족, 적정, 초과 투척의 착지와 결과를 확인한다.
-- [ ] 경계선 접촉, 다른 칸 착지, 놀이판 밖 착지를 실패로 확인한다.
+- [ ] Grab으로 약하게·적당히·세게 던진 착지와 결과를 확인한다. 7·8번 칸까지 던질 수 있는지 보고 `Throw Velocity Scale`을 조정한다.
+- [ ] 파워 부족, 적정, 초과 투척의 착지와 결과를 확인한다. 해당 없음 — Grab 투척으로 교체(20261120-002).
+- [ ] 경계선 접촉, 다른 칸 착지, 놀이판 밖 착지를 실패로 확인한다. 경계선 접촉 실패는 20261120-007 Play Mode에서 확인(망을 놓아 떨어뜨림). 다른 칸·놀이판 밖 착지는 미확인.
 - [ ] 실패 후 동일 목표 칸을 다시 선택할 수 있는지 확인한다.
 - [ ] 외발, 양발, 목표 칸이 있는 양발 구역의 QTE를 각각 확인한다.
 - [ ] 회전, 복귀, 망 줍기, 라운드 완료를 한 번의 전체 플레이로 확인한다.
@@ -136,6 +271,23 @@
 | 라운드 진행 1→5번 (2026-10-21) | Play Mode, Stone Collider를 실행 중에만 임시 연결, 각 칸 중심에 필요 파워로 `Throw` 호출 | 통과 | 착지 감속과 판정 위치 보정 후 1~5번이 연속 성공했고, 목표 칸이 `RoundComplete`를 거쳐 1씩 증가했다. 6~8번 성공은 미확인이다. |
 | 6번 칸 파워 0·100 (2026-10-21) | 같은 방법 | 통과 | 둘 다 실패 처리되었고 실패 횟수가 1씩 늘었으며, 같은 6번 목표의 위치 선택으로 돌아갔다. |
 | Stone Collider 재연결 후 1→3번 (2026-10-21) | 임시 연결 없이 Play Mode에서 같은 방법으로 호출 | 통과 | 1~3번이 연속 성공해 목표가 4번으로 넘어갔고, 4번 파워 0은 실패 처리되었다. |
+| 이동 잠금 연결 (2026-11-20, 20261120-001) | 저장된 `SaBang.unity`의 `manualMovementComponents` 값과 스크립트 GUID 대조 | 통과 | `DynamicMoveProvider`, `SnapTurnProvider`, `TeleportationProvider` 3개가 연결되었다. `UIDoor`의 SpawnPoint 이동은 `XROrigin.MoveCameraToWorldLocation`을 써서 `TeleportationProvider` 비활성화의 영향을 받지 않는다. |
+| 컴파일·Console (2026-11-20, 20261120-001) | Editor.log에서 `error CS`, 예외 검색 | 통과 | 컴파일 오류와 예외가 없다. Console 창을 직접 보지는 않았다. |
+| 7번 이동 잠금·복원, 8번 라운드 진행 Play Mode (2026-11-20) | 미실행 | 미실행 | 열린 Editor에 `com.unity.pipeline`이 없어 CLI로 Play Mode를 조작할 수 없다. Editor에서 직접 확인이 필요하다. |
+| 게이지 UI 미표시 원인 (2026-11-20, 20261120-002) | 사용자 Play Mode 로그와 `SaBang.unity`의 Canvas 설정 대조 | 문제 확인 | 로그상 위치 확정 후 게이지 표시 요청까지 정상 진행되었다. `GaugeRoot`·`ResultText`의 `PlayHUD` Canvas가 Screen Space - Overlay라 HMD에 그려지지 않는다. 다른 UI(`UI`, `GameUI`)는 World Space다. |
+| 컴파일 (20261120-002) | `dotnet build Assembly-CSharp.csproj`(출력은 임시 폴더) | 통과 | 오류 0개. 변경 파일(`SabangStone`, `UIManager`, `SabangGameManager`, `Map`)에서 나온 경고는 없다. Unity Editor 재컴파일과 Console 확인은 미실행이다. |
+| Grab 투척 Play Mode·HMD (20261120-002) | 미실행 | 미실행 | Inspector 연결(`Stone Collider`, `Grab Interactable`)과 `PlayHUD` World Space 전환이 먼저 필요하다. |
+| 컴파일 (20261120-003) | 새 `SabangLandMarker.cs`를 포함한 임시 래퍼 csproj로 `dotnet build`(출력은 임시 폴더, 래퍼는 삭제) | 통과 | 오류 0개. 변경 파일에서 나온 경고는 없다. Unity MCP 브리지는 연결되지 않아 Editor 재컴파일·Console 확인은 미실행이다. |
+| 땅따먹기·클리어·다시 하기 Play Mode·HMD (20261120-003) | 미실행 | 미실행 | Inspector 연결과 클리어 UI 구성이 먼저 필요하다. |
+| 컴파일 (20261120-004) | 새 `SabangHopQte.cs`를 포함한 임시 래퍼 csproj로 `dotnet build`(출력은 임시 폴더, 래퍼는 삭제) | 통과 | 오류 0개. 변경 파일에서 나온 경고는 없다. `git diff --check -- Assets/Script` 통과. Editor 재컴파일·Console 확인은 미실행이다. |
+| 전진 QTE Play Mode·HMD (20261120-004) | 미실행 | 미실행 | `SabangHopQte`·QTE UI 연결이 먼저 필요하다. 실제 Trigger 입력 타이밍과 이동 멀미는 HMD에서 확인한다. |
+| Unity CLI 연결 (20261120-005) | `unity pipeline install` 후 `unity status --until-ready` | 통과 | Editor 6000.3.10f1(PID 32500) `ready`, 포트 7800. `console status` 오류 0·경고 0, `compilationFailed=false`. |
+| 씬 연결 실시간 확인 (20261120-005) | `unity command script eval`로 SerializedObject 값 읽기(수정 없음) | 실패 | 열린 씬이 저장본과 같고 ①~⑧ 문제가 그대로다. |
+| 씬 수정 저장 (20261120-006) | `unity command script eval`로 SerializedObject 수정 후 `EditorSceneManager.SaveScene` | 통과 | `saved=True`. Editor 메모리의 씬을 사본으로 저장해 파일과 비교한 결과 동일했다. |
+| 시작 검사 Play Mode (20261120-006) | `editor.playmode start` 후 `script eval`로 `ValidateQteConfiguration`, `SabangLandMarker/SabangHopQte.ValidateConfiguration`, `CanBeginRound(1)`, `CanStartGame`, `TryStartGame`, `StopGame` 호출 | 통과 | 모두 true. 시작 후 `SelectingPosition`·망 `Ready`·목표 1, 중지 후 `Ready`·`Idle`. Console 오류 0, 경고 1(XR 오디오 출력 드라이버, 무관). 실제 잡기·투척·QTE 입력은 미실행. |
+| 컴파일 (20261120-007) | `unity recompile` | 통과 | 오류 0, 경고 0. |
+| 경계선 생성·판정 Play Mode (20261120-007) | Play Mode에서 `script eval`로 게임 시작 후 망을 해당 위치 0.1m 위에서 놓아(리플렉션으로 `Release` 호출) 실제 물리로 떨어뜨리고, 결과 시점 로그 확인 | 통과 | `Map Borders` 55개, Layer `sabangBorder`. 1·2번 사이 선에서 1번 쪽으로 0.031m 들어간 위치: 중심 칸 Tile1이지만 `touchedBorder=True`로 실패. 1번 칸 중앙(LP1): `touchedBorder=False`, 성공(착지 1번, `MovingForward`). Console 오류 0. 손으로 던진 실제 투척은 미실행. |
+| 씬 연결 점검 (20261120-005) | 저장된 `SaBang.unity` YAML의 참조를 스크립트로 해석 | 실패 | 위 작업 기록의 ①~⑧. Editor에서 저장하지 않은 변경은 반영되지 않았다. |
 
 결과는 통과 / 실패 / 미실행 / 해당 없음으로 구분하고 필요한 근거를 적는다.
 
@@ -148,12 +300,12 @@
 
 ### 플레이 경험과 조정
 
-- [ ] 파워 게이지 속도, 칸별 필요 파워, 허용 범위를 플레이 테스트로 조정한다.
+- [ ] 파워 게이지 속도, 칸별 필요 파워, 허용 범위를 플레이 테스트로 조정한다. 해당 없음 — Grab 투척으로 교체(20261120-002).
 - [ ] QTE 속도와 성공 구간을 난이도별로 조정한다.
 - [ ] 이동과 회전 연출 시간을 조정해 VR 멀미를 줄인다.
 - [ ] 성공, 실패, 망 착지, 망 줍기 사운드와 햅틱을 추가한다.
 - [ ] 목표 칸, 선택 위치, 성공 구간을 알리는 월드 UI를 개선한다.
-- [ ] 실패 원인을 파워 부족, 파워 초과, 경계선 접촉, 다른 칸 착지로 구분해 표시한다.
+- [ ] 실패 원인을 경계선 접촉, 다른 칸 착지, 놀이판 밖 착지로 구분해 표시한다.
 
 ### 기획서 기반 확장
 

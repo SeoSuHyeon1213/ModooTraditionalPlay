@@ -5,7 +5,7 @@ description: Assets/Script의 Unity C# 스크립트를 만들거나 수정할 �
 
 # Unity C# 스크립트 작성 지침
 
-`Assets/Script`의 C# 파일을 만들거나 수정할 때 적용한다. 저장소 루트 `CLAUDE.md`도 함께 따른다.
+`Assets/Script`의 C# 파일을 만들거나 수정할 때 적용한다. 저장소 루트 `AGENTS.md`, `CLAUDE.md`와 `Assets/Script/AGENTS.md`도 함께 따른다. GPT의 작업 지휘·이미지 제작과 Claude의 개발 역할은 루트 공통 지침을 따른다.
 
 ## 작업 시작 시
 

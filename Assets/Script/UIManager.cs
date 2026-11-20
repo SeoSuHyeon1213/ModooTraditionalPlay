@@ -1,19 +1,17 @@
-// 사방치기 HUD의 게이지, 성공 구간과 결과 문구를 표시하며 배치와 형태는 에디터 설정을 유지한다.
+// 사방치기 HUD의 목표 칸 안내, 투척 결과 문구, 이동 QTE 표시와 클리어 화면을 표시하며 배치와 형태는 에디터 설정을 유지한다.
 using TMPro;
 using UnityEngine;
-using UnityEngine.UI;
 
 public class UIManager : MonoBehaviour
 {
     [Header("에디터에서 배치한 플레이 HUD")]
-    [SerializeField] private GameObject gaugeRoot;
-    [SerializeField] private Slider powerSlider;
-    [Tooltip("게이지 전체 폭을 가진 부모 아래의 성공 구간. 게임 값에 따라 Slider의 진행 축 범위만 변경한다.")]
-    [SerializeField] private RectTransform successBand;
-    [Tooltip("Gauge Root 바깥에 배치한다. 성공 시 게이지를 숨겨도 결과는 표시되어야 한다.")]
+    [Tooltip("목표 칸 안내와 투척 결과를 표시한다. HMD에서 보이도록 World Space Canvas에 배치한다.")]
     [SerializeField] private TMP_Text resultText;
 
-    [Header("투척 결과 문구")]
+    [Header("투척 안내와 결과 문구")]
+    [Tooltip("{0}에 목표 칸 번호가 들어간다.")]
+    [SerializeField] private string targetMessageFormat = "{0}번 칸에 망을 던지세요";
+    [SerializeField] private string claimMessage = "자기 땅으로 삼을 칸에 망을 던지세요";
     [SerializeField] private string successMessage = "성공";
     [SerializeField] private string failureMessage = "실패";
     [SerializeField] private SabangGameManager gameManager;
@@ -22,30 +20,97 @@ public class UIManager : MonoBehaviour
     public GameObject nextButton;
     public GameObject startButton;
 
+    [Header("클리어 화면")]
+    [Tooltip("클리어 시 켜는 World Space 패널. 다시 하기 버튼을 이 안에 두고 OnClick에 UIManager.RetryButton을 연결한다.")]
+    [SerializeField] private GameObject clearPanel;
+    [SerializeField] private TMP_Text clearText;
+    [Tooltip("{0}에 완료 시간(분:초), {1}에 전체 실패 횟수, {2}에 얻은 칸 번호가 들어간다.")]
+    [SerializeField] private string clearMessageFormat = "클리어!\n{2}번 칸이 자기 땅이 되었습니다\n완료 시간 {0}\n실패 횟수 {1}회";
 
-    // 컴포넌트 간 이동으로 사라질 수 있는 기존 씬 참조만 보완한다. 새 Inspector 연결을 우선한다.
-    internal void PreserveExistingReferences(GameObject root, Slider slider, RectTransform band, TMP_Text text)
+    [Header("이동 QTE")]
+    [Tooltip("이동 QTE 표시 전체. 고정된 기준 원 이미지와 Approach Ring을 자식으로 두고, 기본은 꺼 둔다.")]
+    [SerializeField] private GameObject qteRoot;
+    [Tooltip("기준 원으로 줄어드는 원. Scale이 1이 되는 순간이 판정 기준점이므로 기준 원과 같은 크기로 만든다.")]
+    [SerializeField] private RectTransform qteApproachRing;
+    [Tooltip("QTE가 나타날 때 Approach Ring의 시작 Scale")]
+    [SerializeField, Min(1.1f)] private float qteRingStartScale = 3f;
+    [Tooltip("{0}에 딛을 칸 번호, {1}에 누를 손 안내가 들어간다.")]
+    [SerializeField] private string qteMessageFormat = "{0} 칸\n{1}";
+    [SerializeField] private string qteEitherHandText = "한 손 Trigger";
+    [SerializeField] private string qteLeftHandText = "왼손 Trigger";
+    [SerializeField] private string qteRightHandText = "오른손 Trigger";
+    [SerializeField] private string qteBothHandsText = "양손 Trigger 동시에";
+    [SerializeField] private string qteFailureMessage = "실패 - 다시";
+
+    private bool reportedOverlayCanvas, reportedMissingClearUI;
+    private SabangGameManager subscribedManager;
+
+    private void OnEnable()
     {
-        if (gaugeRoot == null) gaugeRoot = root;
-        if (powerSlider == null) powerSlider = slider;
-        if (successBand == null) successBand = band;
-        if (resultText == null) resultText = text;
+        subscribedManager = gameManager;
+        if (subscribedManager != null) subscribedManager.StateChanged += HandleGameState;
     }
 
-    public bool ValidateConfiguration(Transform stone)
+    private void Start()
+    {
+        if (subscribedManager == null || subscribedManager.State != SabangGameManager.GameState.Cleared) HideClear();
+        HideQte();
+    }
+
+    private void OnDisable()
+    {
+        if (subscribedManager != null) subscribedManager.StateChanged -= HandleGameState;
+        subscribedManager = null;
+    }
+
+    private void HandleGameState(SabangGameManager.GameState state)
+    {
+        if (state == SabangGameManager.GameState.Cleared) ShowClear();
+        else HideClear();
+    }
+
+    private void ShowClear()
+    {
+        if (clearPanel == null || clearText == null)
+        {
+            if (!reportedMissingClearUI)
+                Debug.LogError("UIManager: 클리어 화면을 표시하려면 Clear Panel과 Clear Text를 연결하세요.", this);
+            reportedMissingClearUI = true;
+            return;
+        }
+        int seconds = Mathf.FloorToInt(subscribedManager.PlaySeconds);
+        string time = $"{seconds / 60:00}:{seconds % 60:00}";
+        clearText.text = string.Format(clearMessageFormat, time, subscribedManager.TotalFailures, subscribedManager.ClaimedTile);
+        if (!clearPanel.activeSelf) clearPanel.SetActive(true);
+    }
+
+    private void HideClear()
+    {
+        if (clearPanel != null && clearPanel.activeSelf) clearPanel.SetActive(false);
+    }
+
+    // 클리어 패널의 다시 하기 버튼 OnClick에 연결한다.
+    public void RetryButton()
+    {
+        if (gameManager == null)
+        {
+            Debug.LogError("UIManager: Game Manager에 SabangGameManager를 연결하세요.", this);
+            return;
+        }
+        gameManager.RestartGame();
+    }
+
+    public bool ValidateConfiguration()
     {
         if (!isActiveAndEnabled) return ConfigurationError("UIManager를 활성화하세요.");
-        if (gaugeRoot == null || powerSlider == null || successBand == null || resultText == null)
-            return ConfigurationError("Gauge Root, Power Slider, Success Band, Result Text를 연결하세요.");
-        if (transform.IsChildOf(gaugeRoot.transform)
-            || (stone != null && stone.IsChildOf(gaugeRoot.transform))
-            || resultText.transform.IsChildOf(gaugeRoot.transform))
-            return ConfigurationError("UIManager, 망과 Result Text는 꺼지는 Gauge Root 바깥에 배치하세요.");
-        if (!powerSlider.transform.IsChildOf(gaugeRoot.transform)
-            || !successBand.IsChildOf(gaugeRoot.transform))
-            return ConfigurationError("Power Slider와 Success Band는 Gauge Root 안에 배치하세요.");
-        if (powerSlider.wholeNumbers || Mathf.Approximately(powerSlider.minValue, powerSlider.maxValue))
-            return ConfigurationError("Power Slider의 Whole Numbers를 끄고 Min Value와 Max Value를 다르게 지정하세요.");
+        if (resultText == null) return ConfigurationError("Result Text를 연결하세요.");
+        Canvas canvas = resultText.canvas != null ? resultText.canvas.rootCanvas : null;
+        if (!reportedOverlayCanvas && canvas != null && canvas.renderMode == RenderMode.ScreenSpaceOverlay)
+        {
+            // Screen Space - Overlay Canvas는 Game 창에만 그려지고 HMD에는 표시되지 않는다.
+            Debug.LogWarning($"UIManager: Result Text의 Canvas '{canvas.name}'가 Screen Space - Overlay입니다. HMD에서 보이도록 World Space로 바꾸세요.", canvas);
+            reportedOverlayCanvas = true;
+        }
         return true;
     }
 
@@ -55,46 +120,55 @@ public class UIManager : MonoBehaviour
         return false;
     }
 
-    public void ShowGauge(float requiredPower, float tolerance)
+    public void ShowTargetPrompt(int targetNumber)
     {
-        SetSuccessRange(requiredPower, tolerance);
-        SetPower(0f);
-        if (gaugeRoot != null && !gaugeRoot.activeSelf) gaugeRoot.SetActive(true);
+        SetResult(string.Format(targetMessageFormat, targetNumber));
     }
 
-    public void HideGauge()
+    public void ShowClaimPrompt()
     {
-        if (gaugeRoot != null && gaugeRoot.activeSelf) gaugeRoot.SetActive(false);
+        SetResult(claimMessage);
     }
 
-    public void SetPower(float power)
+    // 이동 QTE를 쓸 때 시작 전에 호출한다. 기준점이 보이지 않으면 타이밍을 맞출 수 없으므로 필수로 확인한다.
+    public bool ValidateQteConfiguration()
     {
-        if (powerSlider == null) return;
-        float value = Mathf.Lerp(powerSlider.minValue, powerSlider.maxValue, Mathf.Clamp01(power / 100f));
-        // 표시 갱신을 입력 이벤트로 전달하지 않는다. Inspector의 Slider 범위도 유지한다.
-        powerSlider.SetValueWithoutNotify(value);
+        if (!ValidateConfiguration()) return false;
+        if (qteRoot == null || qteApproachRing == null)
+            return ConfigurationError("이동 QTE를 표시하려면 QTE Root와 QTE Approach Ring을 연결하세요.");
+        if (!qteApproachRing.IsChildOf(qteRoot.transform))
+            return ConfigurationError("QTE Approach Ring은 QTE Root의 자식으로 두세요.");
+        return true;
     }
 
-    private void SetSuccessRange(float requiredPower, float tolerance)
+    public void ShowQte(string tiles, SabangHopQte.HopInput input)
     {
-        if (successBand == null || powerSlider == null) return;
-        float required = Mathf.Clamp(requiredPower, 0f, 100f);
-        float margin = Mathf.Max(0f, tolerance);
-        float lower = Mathf.Clamp01((required - margin) / 100f);
-        float upper = Mathf.Clamp01((required + margin) / 100f);
-        Slider.Direction direction = powerSlider.direction;
-        bool horizontal = direction == Slider.Direction.LeftToRight || direction == Slider.Direction.RightToLeft;
-        bool reversed = direction == Slider.Direction.RightToLeft || direction == Slider.Direction.TopToBottom;
-        int axis = horizontal ? 0 : 1;
-        Vector2 min = successBand.anchorMin, max = successBand.anchorMax;
-        min[axis] = reversed ? 1f - upper : lower;
-        max[axis] = reversed ? 1f - lower : upper;
-        successBand.anchorMin = min;
-        successBand.anchorMax = max;
-        Vector2 low = successBand.offsetMin, high = successBand.offsetMax;
-        low[axis] = high[axis] = 0f;
-        successBand.offsetMin = low;
-        successBand.offsetMax = high;
+        string hand = input == SabangHopQte.HopInput.LeftHand ? qteLeftHandText
+            : input == SabangHopQte.HopInput.RightHand ? qteRightHandText
+            : input == SabangHopQte.HopInput.BothHands ? qteBothHandsText
+            : qteEitherHandText;
+        SetResult(string.Format(qteMessageFormat, tiles, hand));
+        SetQteApproach(0f);
+        if (qteRoot != null && !qteRoot.activeSelf) qteRoot.SetActive(true);
+    }
+
+    // progress가 0이면 시작 크기, 1이면 기준 원과 같은 크기(판정 기준점)다. 기준점을 지나면 계속 줄어든다.
+    public void SetQteApproach(float progress)
+    {
+        if (qteApproachRing == null) return;
+        float scale = Mathf.Max(0f, Mathf.LerpUnclamped(qteRingStartScale, 1f, progress));
+        qteApproachRing.localScale = new Vector3(scale, scale, 1f);
+    }
+
+    public void ShowQteFailure()
+    {
+        SetResult(qteFailureMessage);
+        HideQte();
+    }
+
+    public void HideQte()
+    {
+        if (qteRoot != null && qteRoot.activeSelf) qteRoot.SetActive(false);
     }
 
     public void ShowThrowResult(bool success)
@@ -105,12 +179,6 @@ public class UIManager : MonoBehaviour
     public void ClearResult()
     {
         SetResult("");
-    }
-
-    public void ResetPresentation()
-    {
-        HideGauge();
-        ClearResult();
     }
 
     private void SetResult(string message)
